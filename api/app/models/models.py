@@ -40,6 +40,26 @@ class User(Base):
     # Relationships
     loans = relationship("LoanApplication", back_populates="user")
 
+class Borrower(Base):
+    __tablename__ = "borrowers"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    loan_id = Column(Integer, ForeignKey("loan_applications.id"))
+    is_co_borrower = Column(Boolean, default=False)
+    full_name = Column(String)
+    email = Column(String)
+    phone = Column(String)
+    credit_score = Column(Integer)
+    annual_income = Column(Float)
+    employment_status = Column(String)
+    employer = Column(String)
+    years_at_job = Column(Float)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationship
+    loan = relationship("LoanApplication", back_populates="borrowers")
+
 class LoanApplication(Base):
     __tablename__ = "loan_applications"
 
@@ -62,11 +82,31 @@ class LoanApplication(Base):
     user = relationship("User", back_populates="loans")
     documents = relationship("Document", back_populates="loan")
     timeline = relationship("TimelineEvent", back_populates="loan")
+    borrowers = relationship("Borrower", back_populates="loan")
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         if not self.application_number:
             self.application_number = f"LOAN-{uuid.uuid4().hex[:8].upper()}"
+
+class VehicleDetails(Base):
+    __tablename__ = "vehicle_details"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    loan_id = Column(Integer, ForeignKey("loan_applications.id"))
+    make = Column(String)
+    model = Column(String)
+    year = Column(Integer)
+    vin = Column(String)
+    color = Column(String)
+    mileage = Column(Integer)
+    condition = Column(String)
+    vehicle_value = Column(Float)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationship
+    loan = relationship("LoanApplication", back_populates="vehicle_details")
 
 class Document(Base):
     __tablename__ = "documents"
@@ -94,3 +134,19 @@ class TimelineEvent(Base):
 
     # Relationships
     loan = relationship("LoanApplication", back_populates="timeline")
+
+class Note(Base):
+    __tablename__ = "notes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    loan_id = Column(Integer, ForeignKey("loan_applications.id"))
+    author = Column(String)
+    content = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationship
+    loan = relationship("LoanApplication", back_populates="notes")
+
+# Add the relationship for notes to LoanApplication
+LoanApplication.vehicle_details = relationship("VehicleDetails", back_populates="loan", uselist=False)
+LoanApplication.notes = relationship("Note", back_populates="loan")

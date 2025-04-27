@@ -52,7 +52,7 @@ def get_loan_applications(
             application_number=loan.application_number,
             customer_name=customer_name,
             status=loan.status,
-            submitted_date=loan.submitted_date,
+            created_at=loan.created_at,  # Changed from submitted_date to created_at
             loan_amount=loan.loan_amount
         ))
     

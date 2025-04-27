@@ -26,6 +26,89 @@ class User(UserBase):
     class Config:
         orm_mode = True
 
+# Add the missing UserResponse schema used in the users.py router
+class UserResponse(BaseModel):
+    id: int
+    email: EmailStr
+    full_name: str
+    is_active: bool
+    is_admin: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
+# Document schemas
+class DocumentBase(BaseModel):
+    name: str
+
+class DocumentCreate(DocumentBase):
+    pass
+
+class DocumentUpdate(BaseModel):
+    name: Optional[str] = None
+    status: Optional[DocumentStatus] = None
+
+class Document(DocumentBase):
+    id: int
+    loan_id: int
+    file_path: str
+    status: DocumentStatus
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
+# Add the missing DocumentResponse schema used in the documents.py router
+class DocumentResponse(Document):
+    """Response model for document endpoints"""
+    
+    class Config:
+        orm_mode = True
+
+# Timeline event schemas
+class TimelineEventBase(BaseModel):
+    event: str
+    user: str
+    type: TimelineEventType = TimelineEventType.INFO
+
+class TimelineEventCreate(TimelineEventBase):
+    pass
+
+class TimelineEvent(TimelineEventBase):
+    id: int
+    loan_id: int
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+class TimelineEventResponse(TimelineEventBase):
+    id: int
+    loan_id: int
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+# Note schemas
+class NoteBase(BaseModel):
+    author: str
+    content: str
+
+class NoteCreate(NoteBase):
+    pass
+
+class NoteResponse(NoteBase):
+    id: int
+    loan_id: int
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
 # Loan application schemas
 class LoanApplicationBase(BaseModel):
     vehicle_make: str
@@ -55,6 +138,17 @@ class LoanApplicationUpdate(BaseModel):
     interest_rate: Optional[float] = None
     monthly_payment: Optional[float] = None
 
+class LoanApplicationSummary(BaseModel):
+    id: int
+    application_number: str
+    customer_name: str
+    status: LoanStatus
+    created_at: datetime
+    loan_amount: float
+
+    class Config:
+        orm_mode = True
+
 class LoanApplication(LoanApplicationBase):
     id: int
     application_number: str
@@ -68,49 +162,26 @@ class LoanApplication(LoanApplicationBase):
     class Config:
         orm_mode = True
 
-class LoanApplicationDetail(LoanApplication):
-    user: User
-    documents: List["Document"] = []
-    timeline: List["TimelineEvent"] = []
-
-    class Config:
-        orm_mode = True
-
-# Document schemas
-class DocumentBase(BaseModel):
-    name: str
-
-class DocumentCreate(DocumentBase):
-    pass
-
-class DocumentUpdate(BaseModel):
-    name: Optional[str] = None
-    status: Optional[DocumentStatus] = None
-
-class Document(DocumentBase):
+class LoanApplicationResponse(BaseModel):
     id: int
-    loan_id: int
-    file_path: str
-    status: DocumentStatus
+    application_number: str
+    status: LoanStatus
+    loan_amount: float
+    term_years: Optional[int] = None
+    interest_rate: Optional[float] = None
+    monthly_payment: Optional[float] = None
+    down_payment: Optional[float] = None
+    loan_to_value: Optional[float] = None
     created_at: datetime
     updated_at: datetime
 
     class Config:
         orm_mode = True
 
-# Timeline event schemas
-class TimelineEventBase(BaseModel):
-    event: str
-    user: str
-    type: TimelineEventType = TimelineEventType.INFO
-
-class TimelineEventCreate(TimelineEventBase):
-    pass
-
-class TimelineEvent(TimelineEventBase):
-    id: int
-    loan_id: int
-    created_at: datetime
+class LoanApplicationDetail(LoanApplication):
+    user: User
+    documents: List["Document"] = []
+    timeline: List["TimelineEvent"] = []
 
     class Config:
         orm_mode = True

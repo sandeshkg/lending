@@ -28,3 +28,11 @@ def init_db():
         db.commit()
     
     db.close()
+
+# Add the create_tables function that was imported in main.py
+def create_tables():
+    """
+    Create database tables and initialize data
+    This function exists to match the import in main.py
+    """
+    init_db()
