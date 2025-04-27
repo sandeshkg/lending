@@ -1,0 +1,94 @@
+/* App-wide styles */
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.main-container {
+  display: flex;
+  flex: 1;
+  position: relative;
+}
+
+.content {
+  flex: 1;
+  padding: 20px;
+  background-color: #f5f5f5;
+  min-height: calc(100vh - 64px);
+  transition: margin-left 0.3s ease;
+}
+
+.content-expanded {
+  margin-left: calc(-240px + 57px);
+}
+
+/* Dashboard styles */
+.dashboard-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.stats-card {
+  transition: transform 0.3s ease;
+}
+
+.stats-card:hover {
+  transform: translateY(-5px);
+}
+
+/* Document viewer styles */
+.document-viewer {
+  display: flex;
+  gap: 20px;
+  height: calc(100vh - 104px);
+}
+
+.document-preview {
+  flex: 1;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  overflow: auto;
+  background: white;
+}
+
+.document-info {
+  width: 350px;
+  overflow: auto;
+}
+
+/* Document upload styles */
+.upload-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.drop-zone {
+  border: 2px dashed #1976d2;
+  border-radius: 4px;
+  padding: 40px;
+  text-align: center;
+  cursor: pointer;
+  margin: 20px 0;
+  background-color: rgba(25, 118, 210, 0.04);
+  transition: background-color 0.3s ease;
+}
+
+.drop-zone:hover {
+  background-color: rgba(25, 118, 210, 0.08);
+}
+
+/* Animation styles */
+.fade-in {
+  animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
