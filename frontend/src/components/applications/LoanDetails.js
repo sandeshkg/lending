@@ -25,7 +25,9 @@ import {
   Avatar,
   IconButton,
   Stack,
-  Alert
+  Alert,
+  CircularProgress,
+  TextField
 } from '@mui/material';
 import {
   Timeline,
@@ -46,179 +48,73 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PendingIcon from '@mui/icons-material/Pending';
 import ErrorIcon from '@mui/icons-material/Error';
 import WarningIcon from '@mui/icons-material/Warning';
-import SpeedIcon from '@mui/icons-material/Speed';
-import CarRepairIcon from '@mui/icons-material/CarRepair';
-import DownloadIcon from '@mui/icons-material/Download';
 import EditIcon from '@mui/icons-material/Edit';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
-
-// Mock detailed vehicle loan application data
-const mockLoanDetails = {
-  'LA-2025-1001': {
-    id: 'LA-2025-1001',
-    customerName: 'John Doe',
-    status: 'pending',
-    submittedDate: '2025-04-18',
-    loanType: 'Auto Loan',
-    loanAmount: 35000,
-    term: 5, // years
-    interestRate: 4.5,
-    estimatedMonthlyPayment: 652.75,
-    vehicleDetails: {
-      make: 'Toyota',
-      model: 'Camry',
-      year: 2025,
-      vin: '1HGBH41JXMN109186',
-      color: 'Silver',
-      mileage: 15,
-      condition: 'New'
-    },
-    vehicleValue: 38500,
-    downPayment: 3500,
-    loanToValue: 90.9, // percentage
-    borrowerInfo: {
-      phone: '(555) 123-4567',
-      email: 'john.doe@example.com',
-      creditScore: 745,
-      annualIncome: 85000,
-      employmentStatus: 'Employed',
-      employer: 'ABC Corporation',
-      yearsAtJob: 5
-    },
-    coBorrowerInfo: {
-      name: 'Jane Doe',
-      phone: '(555) 987-6543',
-      email: 'jane.doe@example.com',
-      creditScore: 760,
-      annualIncome: 75000,
-      employmentStatus: 'Employed',
-      employer: 'XYZ Inc',
-      yearsAtJob: 3
-    },
-    documents: [
-      { id: 'doc1', name: 'Driver\'s License', status: 'validated' },
-      { id: 'doc2', name: 'Proof of Insurance', status: 'validated' },
-      { id: 'doc3', name: 'Pay Stubs', status: 'pending' },
-      { id: 'doc4', name: 'Vehicle Purchase Agreement', status: 'issues' },
-      { id: 'doc5', name: 'Credit Application', status: 'pending' }
-    ],
-    timeline: [
-      { date: '2025-04-18T14:30:00', event: 'Application Submitted', user: 'John Doe', type: 'info' },
-      { date: '2025-04-19T09:15:00', event: 'Initial Review Started', user: 'Sarah Johnson', type: 'info' },
-      { date: '2025-04-20T11:45:00', event: 'Documents Requested', user: 'Sarah Johnson', type: 'warning' },
-      { date: '2025-04-22T16:20:00', event: 'Documents Uploaded', user: 'John Doe', type: 'success' },
-      { date: '2025-04-23T10:30:00', event: 'Document Issues Identified', user: 'Michael Thompson', type: 'error' },
-      { date: '2025-04-25T14:00:00', event: 'Pending Credit Check', user: 'System', type: 'info' }
-    ],
-    notes: [
-      { date: '2025-04-19T10:00:00', content: 'Applicant has strong credit history. Vehicle is available at Toyota dealership on Main Street.', author: 'Sarah Johnson' },
-      { date: '2025-04-23T11:15:00', content: 'Purchase agreement missing dealer signature. Please request updated document.', author: 'Michael Thompson' }
-    ]
-  },
-  'LA-2025-1003': {
-    id: 'LA-2025-1003',
-    customerName: 'Robert Johnson',
-    status: 'processing',
-    submittedDate: '2025-04-20',
-    loanType: 'Auto Loan',
-    loanAmount: 42000,
-    term: 6, // years
-    interestRate: 3.9,
-    estimatedMonthlyPayment: 651.43,
-    vehicleDetails: {
-      make: 'Honda',
-      model: 'CR-V',
-      year: 2025,
-      vin: '2HKRW2H59MH229181',
-      color: 'Blue',
-      mileage: 8,
-      condition: 'New'
-    },
-    vehicleValue: 45000,
-    downPayment: 3000,
-    loanToValue: 93.3, // percentage
-    borrowerInfo: {
-      phone: '(555) 333-8888',
-      email: 'robert.johnson@example.com',
-      creditScore: 720,
-      annualIncome: 90000,
-      employmentStatus: 'Employed',
-      employer: 'Johnson Enterprises',
-      yearsAtJob: 7
-    },
-    documents: [
-      { id: 'doc1', name: 'Driver\'s License', status: 'validated' },
-      { id: 'doc2', name: 'Proof of Insurance', status: 'validated' },
-      { id: 'doc3', name: 'Pay Stubs', status: 'validated' },
-      { id: 'doc4', name: 'Vehicle Purchase Agreement', status: 'validated' },
-      { id: 'doc5', name: 'Credit Application', status: 'processing' }
-    ],
-    timeline: [
-      { date: '2025-04-20T09:45:00', event: 'Application Submitted', user: 'Robert Johnson', type: 'info' },
-      { date: '2025-04-21T11:30:00', event: 'Initial Review Completed', user: 'Maria Garcia', type: 'success' },
-      { date: '2025-04-22T14:15:00', event: 'Documents Verified', user: 'Maria Garcia', type: 'success' },
-      { date: '2025-04-25T10:00:00', event: 'Vehicle Inspection Scheduled', user: 'David Wilson', type: 'info' },
-      { date: '2025-04-27T09:30:00', event: 'Waiting for Inspection Results', user: 'System', type: 'info' }
-    ],
-    notes: [
-      { date: '2025-04-21T13:20:00', content: 'All required documents have been provided. Proceeding with verification.', author: 'Maria Garcia' },
-      { date: '2025-04-25T11:30:00', content: 'Vehicle inspection scheduled for April 30, 2025 at Honda dealership.', author: 'David Wilson' }
-    ]
-  }
-};
-
-// Add more mock data for other applications as needed
-Object.assign(mockLoanDetails, {
-  'LA-2025-1002': { 
-    ...mockLoanDetails['LA-2025-1001'], 
-    id: 'LA-2025-1002', 
-    customerName: 'Jane Smith', 
-    status: 'approved',
-    vehicleDetails: {
-      make: 'Ford',
-      model: 'Explorer',
-      year: 2025,
-      vin: '1FMSK8DH3MGB52701',
-      color: 'Black',
-      mileage: 12,
-      condition: 'New'
-    }
-  },
-  'LA-2025-1004': { 
-    ...mockLoanDetails['LA-2025-1003'], 
-    id: 'LA-2025-1004', 
-    customerName: 'Emily Wilson', 
-    status: 'needs_documents',
-    vehicleDetails: {
-      make: 'Chevrolet',
-      model: 'Equinox',
-      year: 2024,
-      vin: '2GNALBEK7E1234567',
-      color: 'Red',
-      mileage: 15000,
-      condition: 'Used'
-    }
-  },
-  // Add more mock entries for other application IDs
-});
+import DownloadIcon from '@mui/icons-material/Download';
+import loanService from '../../services/loanService';
+import documentService from '../../services/documentService';
 
 const LoanDetails = () => {
   const { id } = useParams();
   const [loan, setLoan] = useState(null);
   const [currentTab, setCurrentTab] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [documents, setDocuments] = useState([]);
+  const [newNote, setNewNote] = useState({ author: '', content: '' });
+  const [submittingNote, setSubmittingNote] = useState(false);
 
+  // Fetch loan details from API
   useEffect(() => {
-    // In a real app, you would fetch the loan details from an API
-    // For now, we'll use our mock data
-    setTimeout(() => {
-      setLoan(mockLoanDetails[id] || null);
-      setLoading(false);
-    }, 500); // simulate loading
+    const fetchLoanDetails = async () => {
+      try {
+        setLoading(true);
+        const loanData = await loanService.getLoan(id);
+        setLoan(loanData);
+        
+        // Fetch documents for this loan
+        const docsData = await documentService.getDocuments(loanData.id);
+        setDocuments(docsData);
+        
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching loan details:', err);
+        setError('Failed to load loan details. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLoanDetails();
   }, [id]);
 
   const handleTabChange = (event, newValue) => {
     setCurrentTab(newValue);
+  };
+
+  const handleNoteInputChange = (e) => {
+    const { name, value } = e.target;
+    setNewNote(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleAddNote = async () => {
+    if (!newNote.author || !newNote.content) return;
+    
+    try {
+      setSubmittingNote(true);
+      await loanService.addNote(loan.id, newNote);
+      
+      // Refresh loan data to get updated notes
+      const updatedLoan = await loanService.getLoan(id);
+      setLoan(updatedLoan);
+      
+      // Reset form
+      setNewNote({ author: '', content: '' });
+    } catch (err) {
+      console.error('Error adding note:', err);
+    } finally {
+      setSubmittingNote(false);
+    }
   };
 
   // Render status chip with appropriate color
@@ -227,8 +123,10 @@ const LoanDetails = () => {
       pending: { label: 'Pending Review', color: 'warning', icon: <PendingIcon /> },
       approved: { label: 'Approved', color: 'success', icon: <CheckCircleIcon /> },
       rejected: { label: 'Rejected', color: 'error', icon: <ErrorIcon /> },
-      processing: { label: 'Processing', color: 'primary', icon: <PendingIcon /> },
+      in_review: { label: 'In Review', color: 'primary', icon: <PendingIcon /> },
       needs_documents: { label: 'Needs Documents', color: 'secondary', icon: <WarningIcon /> },
+      funded: { label: 'Funded', color: 'success', icon: <CheckCircleIcon /> },
+      closed: { label: 'Closed', color: 'default', icon: null },
       validated: { label: 'Validated', color: 'success', icon: <CheckCircleIcon /> },
       issues: { label: 'Issues Found', color: 'error', icon: <ErrorIcon /> }
     };
@@ -247,12 +145,13 @@ const LoanDetails = () => {
   if (loading) {
     return (
       <Box sx={{ p: 4, textAlign: 'center' }}>
-        <Typography variant="h6">Loading loan details...</Typography>
+        <CircularProgress />
+        <Typography variant="h6" sx={{ mt: 2 }}>Loading loan details...</Typography>
       </Box>
     );
   }
 
-  if (!loan) {
+  if (error || !loan) {
     return (
       <Box sx={{ p: 4 }}>
         <Button 
@@ -264,11 +163,15 @@ const LoanDetails = () => {
           Back to Applications
         </Button>
         <Alert severity="error">
-          Loan application not found. The application ID may be invalid or the application has been removed.
+          {error || "Loan application not found. The application ID may be invalid or the application has been removed."}
         </Alert>
       </Box>
     );
   }
+
+  // Find primary borrower
+  const primaryBorrower = loan.borrowers?.find(b => !b.is_co_borrower);
+  const coBorrower = loan.borrowers?.find(b => b.is_co_borrower);
 
   return (
     <div>
@@ -283,7 +186,7 @@ const LoanDetails = () => {
           Back to Applications
         </Button>
         <Typography variant="h4" sx={{ flexGrow: 1 }}>
-          Vehicle Loan Application {loan.id}
+          Vehicle Loan Application {loan.application_number}
         </Typography>
         {getStatusChip(loan.status)}
       </Box>
@@ -303,23 +206,25 @@ const LoanDetails = () => {
                   <PersonIcon />
                 </Avatar>
                 <Box>
-                  <Typography variant="h6" sx={{ wordBreak: 'break-word' }}>{loan.customerName}</Typography>
+                  <Typography variant="h6" sx={{ wordBreak: 'break-word' }}>{primaryBorrower?.full_name || "No Borrower"}</Typography>
                   <Typography variant="body2" color="text.secondary">
                     Applicant
                   </Typography>
                 </Box>
               </Box>
-              <Box sx={{ pl: { xs: 0, sm: 5 } }}>
-                <Typography variant="body2" sx={{ mb: 0.5 }}>
-                  <strong>Phone:</strong> {loan.borrowerInfo.phone}
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 0.5, wordBreak: 'break-all' }}>
-                  <strong>Email:</strong> {loan.borrowerInfo.email}
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 0.5 }}>
-                  <strong>Credit Score:</strong> {loan.borrowerInfo.creditScore}
-                </Typography>
-              </Box>
+              {primaryBorrower && (
+                <Box sx={{ pl: { xs: 0, sm: 5 } }}>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    <strong>Phone:</strong> {primaryBorrower.phone}
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5, wordBreak: 'break-all' }}>
+                    <strong>Email:</strong> {primaryBorrower.email}
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    <strong>Credit Score:</strong> {primaryBorrower.credit_score}
+                  </Typography>
+                </Box>
+              )}
             </Grid>
             
             <Grid item xs={12} sm={6} md={4}>
@@ -335,21 +240,23 @@ const LoanDetails = () => {
                 <Box>
                   <Typography variant="h6">Vehicle Details</Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ wordBreak: 'break-word' }}>
-                    {loan.vehicleDetails.year} {loan.vehicleDetails.make} {loan.vehicleDetails.model}
+                    {loan.vehicle_year} {loan.vehicle_make} {loan.vehicle_model}
                   </Typography>
                 </Box>
               </Box>
-              <Box sx={{ pl: { xs: 0, sm: 5 } }}>
-                <Typography variant="body2" sx={{ mb: 0.5, wordBreak: 'break-all' }}>
-                  <strong>VIN:</strong> {loan.vehicleDetails.vin}
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 0.5 }}>
-                  <strong>Vehicle Value:</strong> ${loan.vehicleValue.toLocaleString()}
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 0.5 }}>
-                  <strong>Condition:</strong> {loan.vehicleDetails.condition}
-                </Typography>
-              </Box>
+              {loan.vehicle_details && (
+                <Box sx={{ pl: { xs: 0, sm: 5 } }}>
+                  <Typography variant="body2" sx={{ mb: 0.5, wordBreak: 'break-all' }}>
+                    <strong>VIN:</strong> {loan.vehicle_details.vin}
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    <strong>Vehicle Value:</strong> ${loan.vehicle_price?.toLocaleString()}
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    <strong>Condition:</strong> {loan.vehicle_details.condition}
+                  </Typography>
+                </Box>
+              )}
             </Grid>
             
             <Grid item xs={12} sm={6} md={4}>
@@ -363,21 +270,21 @@ const LoanDetails = () => {
                   <AttachMoneyIcon />
                 </Avatar>
                 <Box>
-                  <Typography variant="h6">${loan.loanAmount.toLocaleString()}</Typography>
+                  <Typography variant="h6">${loan.loan_amount?.toLocaleString()}</Typography>
                   <Typography variant="body2" color="text.secondary">
-                    {loan.loanType} ({loan.term} years)
+                    Vehicle Loan ({Math.floor(loan.loan_term_months / 12)} years)
                   </Typography>
                 </Box>
               </Box>
               <Box sx={{ pl: { xs: 0, sm: 5 } }}>
                 <Typography variant="body2" sx={{ mb: 0.5 }}>
-                  <strong>Interest Rate:</strong> {loan.interestRate}%
+                  <strong>Interest Rate:</strong> {loan.interest_rate}%
                 </Typography>
                 <Typography variant="body2" sx={{ mb: 0.5 }}>
-                  <strong>Monthly Payment:</strong> ${loan.estimatedMonthlyPayment.toLocaleString()}
+                  <strong>Monthly Payment:</strong> ${loan.monthly_payment?.toLocaleString()}
                 </Typography>
                 <Typography variant="body2" sx={{ mb: 0.5 }}>
-                  <strong>Submitted:</strong> {new Date(loan.submittedDate).toLocaleDateString()}
+                  <strong>Submitted:</strong> {new Date(loan.created_at).toLocaleDateString()}
                 </Typography>
               </Box>
             </Grid>
@@ -411,46 +318,50 @@ const LoanDetails = () => {
                 </Typography>
                 <Divider sx={{ mb: 2 }} />
                 
-                <TableContainer component={Paper} elevation={0}>
-                  <Table size="small">
-                    <TableBody>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Full Name</TableCell>
-                        <TableCell>{loan.customerName}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Phone</TableCell>
-                        <TableCell>{loan.borrowerInfo.phone}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Email</TableCell>
-                        <TableCell>{loan.borrowerInfo.email}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Credit Score</TableCell>
-                        <TableCell>{loan.borrowerInfo.creditScore}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Annual Income</TableCell>
-                        <TableCell>${loan.borrowerInfo.annualIncome.toLocaleString()}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Employment Status</TableCell>
-                        <TableCell>{loan.borrowerInfo.employmentStatus}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Employer</TableCell>
-                        <TableCell>{loan.borrowerInfo.employer}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Years at Current Job</TableCell>
-                        <TableCell>{loan.borrowerInfo.yearsAtJob}</TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                {primaryBorrower ? (
+                  <TableContainer component={Paper} elevation={0}>
+                    <Table size="small">
+                      <TableBody>
+                        <TableRow>
+                          <TableCell component="th" scope="row">Full Name</TableCell>
+                          <TableCell>{primaryBorrower.full_name}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell component="th" scope="row">Phone</TableCell>
+                          <TableCell>{primaryBorrower.phone}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell component="th" scope="row">Email</TableCell>
+                          <TableCell>{primaryBorrower.email}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell component="th" scope="row">Credit Score</TableCell>
+                          <TableCell>{primaryBorrower.credit_score}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell component="th" scope="row">Annual Income</TableCell>
+                          <TableCell>${primaryBorrower.annual_income?.toLocaleString()}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell component="th" scope="row">Employment Status</TableCell>
+                          <TableCell>{primaryBorrower.employment_status}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell component="th" scope="row">Employer</TableCell>
+                          <TableCell>{primaryBorrower.employer}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell component="th" scope="row">Years at Current Job</TableCell>
+                          <TableCell>{primaryBorrower.years_at_job}</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                ) : (
+                  <Alert severity="info">No primary borrower information available</Alert>
+                )}
 
-                {loan.coBorrowerInfo && (
+                {coBorrower && (
                   <>
                     <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
                       Co-Borrower Information
@@ -462,35 +373,35 @@ const LoanDetails = () => {
                         <TableBody>
                           <TableRow>
                             <TableCell component="th" scope="row">Full Name</TableCell>
-                            <TableCell>{loan.coBorrowerInfo.name}</TableCell>
+                            <TableCell>{coBorrower.full_name}</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell component="th" scope="row">Phone</TableCell>
-                            <TableCell>{loan.coBorrowerInfo.phone}</TableCell>
+                            <TableCell>{coBorrower.phone}</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell component="th" scope="row">Email</TableCell>
-                            <TableCell>{loan.coBorrowerInfo.email}</TableCell>
+                            <TableCell>{coBorrower.email}</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell component="th" scope="row">Credit Score</TableCell>
-                            <TableCell>{loan.coBorrowerInfo.creditScore}</TableCell>
+                            <TableCell>{coBorrower.credit_score}</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell component="th" scope="row">Annual Income</TableCell>
-                            <TableCell>${loan.coBorrowerInfo.annualIncome.toLocaleString()}</TableCell>
+                            <TableCell>${coBorrower.annual_income?.toLocaleString()}</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell component="th" scope="row">Employment Status</TableCell>
-                            <TableCell>{loan.coBorrowerInfo.employmentStatus}</TableCell>
+                            <TableCell>{coBorrower.employment_status}</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell component="th" scope="row">Employer</TableCell>
-                            <TableCell>{loan.coBorrowerInfo.employer}</TableCell>
+                            <TableCell>{coBorrower.employer}</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell component="th" scope="row">Years at Current Job</TableCell>
-                            <TableCell>{loan.coBorrowerInfo.yearsAtJob}</TableCell>
+                            <TableCell>{coBorrower.years_at_job}</TableCell>
                           </TableRow>
                         </TableBody>
                       </Table>
@@ -514,35 +425,35 @@ const LoanDetails = () => {
                     <TableBody>
                       <TableRow>
                         <TableCell component="th" scope="row">Loan Type</TableCell>
-                        <TableCell>{loan.loanType}</TableCell>
+                        <TableCell>Vehicle Loan</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell component="th" scope="row">Loan Amount</TableCell>
-                        <TableCell>${loan.loanAmount.toLocaleString()}</TableCell>
+                        <TableCell>${loan.loan_amount?.toLocaleString()}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell component="th" scope="row">Term</TableCell>
-                        <TableCell>{loan.term} years</TableCell>
+                        <TableCell>{Math.floor(loan.loan_term_months / 12)} years</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell component="th" scope="row">Interest Rate</TableCell>
-                        <TableCell>{loan.interestRate}%</TableCell>
+                        <TableCell>{loan.interest_rate}%</TableCell>
                       </TableRow>
                       <TableRow>
-                        <TableCell component="th" scope="row">Estimated Monthly Payment</TableCell>
-                        <TableCell>${loan.estimatedMonthlyPayment.toLocaleString()}</TableCell>
+                        <TableCell component="th" scope="row">Monthly Payment</TableCell>
+                        <TableCell>${loan.monthly_payment?.toLocaleString()}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell component="th" scope="row">Down Payment</TableCell>
-                        <TableCell>${loan.downPayment.toLocaleString()}</TableCell>
+                        <TableCell>${loan.down_payment?.toLocaleString() || 'N/A'}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell component="th" scope="row">Loan-to-Value Ratio</TableCell>
-                        <TableCell>{loan.loanToValue}%</TableCell>
+                        <TableCell>{loan.loan_to_value?.toFixed(1) || 'N/A'}%</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell component="th" scope="row">Application Date</TableCell>
-                        <TableCell>{new Date(loan.submittedDate).toLocaleDateString()}</TableCell>
+                        <TableCell>{new Date(loan.created_at).toLocaleDateString()}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell component="th" scope="row">Status</TableCell>
@@ -561,44 +472,48 @@ const LoanDetails = () => {
                 </Typography>
                 <Divider sx={{ mb: 2 }} />
                 
-                <TableContainer component={Paper} elevation={0}>
-                  <Table size="small">
-                    <TableBody>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Make</TableCell>
-                        <TableCell>{loan.vehicleDetails.make}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Model</TableCell>
-                        <TableCell>{loan.vehicleDetails.model}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Year</TableCell>
-                        <TableCell>{loan.vehicleDetails.year}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">VIN</TableCell>
-                        <TableCell>{loan.vehicleDetails.vin}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Color</TableCell>
-                        <TableCell>{loan.vehicleDetails.color}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Mileage</TableCell>
-                        <TableCell>{loan.vehicleDetails.mileage.toLocaleString()} miles</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Condition</TableCell>
-                        <TableCell>{loan.vehicleDetails.condition}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Vehicle Value</TableCell>
-                        <TableCell>${loan.vehicleValue.toLocaleString()}</TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                {loan.vehicle_details ? (
+                  <TableContainer component={Paper} elevation={0}>
+                    <Table size="small">
+                      <TableBody>
+                        <TableRow>
+                          <TableCell component="th" scope="row">Make</TableCell>
+                          <TableCell>{loan.vehicle_make}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell component="th" scope="row">Model</TableCell>
+                          <TableCell>{loan.vehicle_model}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell component="th" scope="row">Year</TableCell>
+                          <TableCell>{loan.vehicle_year}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell component="th" scope="row">VIN</TableCell>
+                          <TableCell>{loan.vehicle_details.vin}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell component="th" scope="row">Color</TableCell>
+                          <TableCell>{loan.vehicle_details.color}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell component="th" scope="row">Mileage</TableCell>
+                          <TableCell>{loan.vehicle_details.mileage?.toLocaleString()} miles</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell component="th" scope="row">Condition</TableCell>
+                          <TableCell>{loan.vehicle_details.condition}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell component="th" scope="row">Vehicle Value</TableCell>
+                          <TableCell>${loan.vehicle_price?.toLocaleString()}</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                ) : (
+                  <Alert severity="info">Detailed vehicle information not available</Alert>
+                )}
               </CardContent>
             </Card>
           </Grid>
@@ -613,43 +528,56 @@ const LoanDetails = () => {
               <Typography variant="h6">
                 Required Documents
               </Typography>
-              <Button variant="contained" startIcon={<UploadIcon />}>
+              <Button 
+                variant="contained" 
+                startIcon={<UploadIcon />} 
+                component={Link} 
+                to={`/upload?loanId=${loan.id}`}
+              >
                 Upload New Documents
               </Button>
             </Box>
             <Divider sx={{ mb: 2 }} />
 
             <List>
-              {loan.documents.map((document) => (
-                <ListItem
-                  key={document.id}
-                  secondaryAction={
-                    <Stack direction="row" spacing={1}>
-                      <IconButton edge="end" aria-label="download" title="Download document">
-                        <DownloadIcon />
-                      </IconButton>
-                      <IconButton edge="end" aria-label="view" title="View document" component={Link} to={`/document/${document.id}`}>
-                        <VisibilityIcon />
-                      </IconButton>
-                    </Stack>
-                  }
-                  sx={{ borderBottom: '1px solid #eee' }}
-                >
-                  <ListItemIcon>
-                    <InsertDriveFileIcon />
-                  </ListItemIcon>
-                  <ListItemText 
-                    primary={document.name}
-                    primaryTypographyProps={{ fontWeight: 'medium' }}
-                    secondary={
-                      <Typography variant="body2" color="text.secondary">
-                        Last updated: {new Date(loan.submittedDate).toLocaleDateString()}
-                      </Typography>
+              {documents.length > 0 ? (
+                documents.map((document) => (
+                  <ListItem
+                    key={document.id}
+                    secondaryAction={
+                      <Stack direction="row" spacing={1}>
+                        <IconButton edge="end" aria-label="download" title="Download document">
+                          <DownloadIcon />
+                        </IconButton>
+                        <IconButton edge="end" aria-label="view" title="View document" component={Link} to={`/document/${document.id}`}>
+                          <VisibilityIcon />
+                        </IconButton>
+                      </Stack>
                     }
-                  />
-                  {getStatusChip(document.status)}
-                </ListItem>
-              ))}
+                    sx={{ borderBottom: '1px solid #eee' }}
+                  >
+                    <ListItemIcon>
+                      <InsertDriveFileIcon />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary={document.name}
+                      primaryTypographyProps={{ fontWeight: 'medium' }}
+                      secondary={
+                        <Typography variant="body2" color="text.secondary">
+                          Last updated: {new Date(document.updated_at).toLocaleDateString()}
+                        </Typography>
+                      }
+                    />
+                    {getStatusChip(document.status)}
+                  </ListItem>
+                ))
+              ) : (
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                  <Typography variant="body1" color="text.secondary">
+                    No documents have been uploaded for this application yet.
+                  </Typography>
+                </Box>
+              )}
             </List>
           </CardContent>
         </Card>
@@ -664,35 +592,43 @@ const LoanDetails = () => {
             </Typography>
             <Divider sx={{ mb: 3 }} />
 
-            <Timeline position="alternate">
-              {loan.timeline.map((event, index) => (
-                <TimelineItem key={index}>
-                  <TimelineOppositeContent color="text.secondary">
-                    {new Date(event.date).toLocaleString()}
-                  </TimelineOppositeContent>
-                  <TimelineSeparator>
-                    <TimelineDot color={
-                      event.type === 'success' ? 'success' :
-                      event.type === 'error' ? 'error' :
-                      event.type === 'warning' ? 'warning' : 'primary'
-                    }>
-                      {event.type === 'success' ? <CheckCircleIcon /> :
-                       event.type === 'error' ? <ErrorIcon /> :
-                       event.type === 'warning' ? <WarningIcon /> : <CalendarTodayIcon />}
-                    </TimelineDot>
-                    {index < loan.timeline.length - 1 && <TimelineConnector />}
-                  </TimelineSeparator>
-                  <TimelineContent>
-                    <Paper elevation={3} sx={{ p: 2 }}>
-                      <Typography variant="h6" component="span">
-                        {event.event}
-                      </Typography>
-                      <Typography color="text.secondary">By: {event.user}</Typography>
-                    </Paper>
-                  </TimelineContent>
-                </TimelineItem>
-              ))}
-            </Timeline>
+            {loan.timeline && loan.timeline.length > 0 ? (
+              <Timeline position="alternate">
+                {loan.timeline.map((event, index) => (
+                  <TimelineItem key={index}>
+                    <TimelineOppositeContent color="text.secondary">
+                      {new Date(event.created_at).toLocaleString()}
+                    </TimelineOppositeContent>
+                    <TimelineSeparator>
+                      <TimelineDot color={
+                        event.type === 'success' ? 'success' :
+                        event.type === 'error' ? 'error' :
+                        event.type === 'warning' ? 'warning' : 'primary'
+                      }>
+                        {event.type === 'success' ? <CheckCircleIcon /> :
+                         event.type === 'error' ? <ErrorIcon /> :
+                         event.type === 'warning' ? <WarningIcon /> : <CalendarTodayIcon />}
+                      </TimelineDot>
+                      {index < loan.timeline.length - 1 && <TimelineConnector />}
+                    </TimelineSeparator>
+                    <TimelineContent>
+                      <Paper elevation={3} sx={{ p: 2 }}>
+                        <Typography variant="h6" component="span">
+                          {event.event}
+                        </Typography>
+                        <Typography color="text.secondary">By: {event.user}</Typography>
+                      </Paper>
+                    </TimelineContent>
+                  </TimelineItem>
+                ))}
+              </Timeline>
+            ) : (
+              <Box sx={{ textAlign: 'center', py: 4 }}>
+                <Typography variant="body1" color="text.secondary">
+                  No timeline events available for this application.
+                </Typography>
+              </Box>
+            )}
           </CardContent>
         </Card>
       )}
@@ -701,17 +637,57 @@ const LoanDetails = () => {
       {currentTab === 3 && (
         <Card>
           <CardContent>
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-              <Typography variant="h6">
-                Notes & Communication Log
-              </Typography>
-              <Button variant="contained" startIcon={<EditIcon />}>
-                Add Note
-              </Button>
-            </Box>
-            <Divider sx={{ mb: 2 }} />
+            <Typography variant="h6" gutterBottom>
+              Notes & Communication Log
+            </Typography>
+            <Divider sx={{ mb: 3 }} />
 
-            {loan.notes.length > 0 ? (
+            {/* Add note form */}
+            <Card variant="outlined" sx={{ mb: 3, p: 2 }}>
+              <Typography variant="subtitle1" gutterBottom>
+                Add a New Note
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={3}>
+                  <TextField
+                    fullWidth
+                    label="Author"
+                    name="author"
+                    value={newNote.author}
+                    onChange={handleNoteInputChange}
+                    margin="normal"
+                    size="small"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={9}>
+                  <TextField
+                    fullWidth
+                    label="Note Content"
+                    name="content"
+                    value={newNote.content}
+                    onChange={handleNoteInputChange}
+                    margin="normal"
+                    size="small"
+                    multiline
+                    rows={2}
+                  />
+                </Grid>
+              </Grid>
+              <Box textAlign="right" mt={1}>
+                <Button 
+                  variant="contained" 
+                  size="small" 
+                  onClick={handleAddNote}
+                  disabled={submittingNote || !newNote.author || !newNote.content}
+                  startIcon={submittingNote ? <CircularProgress size={16} /> : <EditIcon />}
+                >
+                  {submittingNote ? 'Adding...' : 'Add Note'}
+                </Button>
+              </Box>
+            </Card>
+
+            {/* Notes list */}
+            {loan.notes && loan.notes.length > 0 ? (
               loan.notes.map((note, index) => (
                 <Card key={index} variant="outlined" sx={{ mb: 2, p: 2 }}>
                   <Box display="flex" justifyContent="space-between" mb={1}>
@@ -719,7 +695,7 @@ const LoanDetails = () => {
                       {note.author}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      {new Date(note.date).toLocaleString()}
+                      {new Date(note.created_at).toLocaleString()}
                     </Typography>
                   </Box>
                   <Typography variant="body1">
@@ -744,7 +720,7 @@ const LoanDetails = () => {
         <Button variant="contained">
           {loan.status === 'pending' || loan.status === 'needs_documents' 
             ? 'Review Application' 
-            : loan.status === 'processing' 
+            : loan.status === 'in_review' 
             ? 'Continue Processing' 
             : 'Update Status'}
         </Button>

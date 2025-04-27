@@ -38,6 +38,23 @@ def get_documents(
     
     return db_loan.documents
 
+@router.get("/detail/{document_id}", response_model=schemas.DocumentResponse)
+def get_document(
+    document_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Get a document by ID
+    """
+    db_document = db.query(models.Document).filter(
+        models.Document.id == document_id
+    ).first()
+    
+    if db_document is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    return db_document
+
 @router.post("/{loan_id}/upload", response_model=schemas.DocumentResponse)
 async def upload_document(
     loan_id: str,

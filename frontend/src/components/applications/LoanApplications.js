@@ -17,47 +17,43 @@ import {
   IconButton,
   Divider,
   TablePagination,
-  Button
+  Button,
+  CircularProgress
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { Link } from 'react-router-dom';
-
-// Update mock data to show only vehicle loans and remove loanType field or set it to 'Vehicle Loan' for all
-const mockApplications = [
-  { id: 'LA-2025-1001', customerName: 'John Doe', status: 'pending', submittedDate: '2025-04-18', loanAmount: 35000 },
-  { id: 'LA-2025-1002', customerName: 'Jane Smith', status: 'approved', submittedDate: '2025-04-15', loanAmount: 42000 },
-  { id: 'LA-2025-1003', customerName: 'Robert Johnson', status: 'processing', submittedDate: '2025-04-20', loanAmount: 28500 },
-  { id: 'LA-2025-1004', customerName: 'Emily Wilson', status: 'needs_documents', submittedDate: '2025-04-22', loanAmount: 31000 },
-  { id: 'LA-2025-1005', customerName: 'Michael Brown', status: 'rejected', submittedDate: '2025-04-10', loanAmount: 45000 },
-  { id: 'LA-2025-1006', customerName: 'Sarah Taylor', status: 'processing', submittedDate: '2025-04-23', loanAmount: 38000 },
-  { id: 'LA-2025-1007', customerName: 'David Wilson', status: 'pending', submittedDate: '2025-04-24', loanAmount: 22500 },
-  { id: 'LA-2025-1008', customerName: 'Lisa Martinez', status: 'approved', submittedDate: '2025-04-19', loanAmount: 36000 },
-  { id: 'LA-2025-1009', customerName: 'Kevin Anderson', status: 'needs_documents', submittedDate: '2025-04-25', loanAmount: 29500 },
-  { id: 'LA-2025-1010', customerName: 'Amanda Garcia', status: 'processing', submittedDate: '2025-04-21', loanAmount: 33000 },
-  { id: 'LA-2025-1011', customerName: 'Thomas Robinson', status: 'pending', submittedDate: '2025-04-26', loanAmount: 40000 },
-  { id: 'LA-2025-1012', customerName: 'Jessica Lee', status: 'needs_documents', submittedDate: '2025-04-17', loanAmount: 27000 },
-];
+import loanService from '../../services/loanService';
 
 const LoanApplications = () => {
   const [applications, setApplications] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Initialize with mock data
+  // Fetch loan applications from API
   useEffect(() => {
-    setApplications(mockApplications);
-  }, []);
+    const fetchApplications = async () => {
+      try {
+        setLoading(true);
+        const data = await loanService.getAllLoans(null, searchTerm);
+        setApplications(data);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching loan applications:', err);
+        setError('Failed to load loan applications. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  // Filter applications based on search term
-  const filteredApplications = applications.filter(app => 
-    app.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    app.customerName.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+    fetchApplications();
+  }, [searchTerm]);
 
-  // Handle search input change
+  // Handle search input change with debounce
   const handleSearchChange = (event) => {
     setSearchTerm(event.target.value);
     setPage(0); // Reset to first page on new search
@@ -81,7 +77,9 @@ const LoanApplications = () => {
       approved: { label: 'Approved', color: 'success' },
       rejected: { label: 'Rejected', color: 'error' },
       processing: { label: 'Processing', color: 'primary' },
-      needs_documents: { label: 'Needs Documents', color: 'secondary' }
+      in_review: { label: 'In Review', color: 'primary' },
+      funded: { label: 'Funded', color: 'success' },
+      closed: { label: 'Closed', color: 'default' }
     };
 
     const config = statusConfig[status] || { label: status, color: 'default' };
@@ -131,70 +129,84 @@ const LoanApplications = () => {
             <Typography variant="h6">
               Applications Requiring Processing
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {filteredApplications.length} applications found
-            </Typography>
+            {!loading && (
+              <Typography variant="body2" color="text.secondary">
+                {applications.length} applications found
+              </Typography>
+            )}
           </Box>
           <Divider sx={{ mb: 2 }} />
 
-          <TableContainer component={Paper} elevation={0}>
-            <Table sx={{ minWidth: 650 }} size="medium">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Application #</TableCell>
-                  <TableCell>Customer Name</TableCell>
-                  <TableCell>Submitted Date</TableCell>
-                  <TableCell>Amount</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredApplications
-                  .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                  .map((application) => (
-                    <TableRow key={application.id}>
-                      <TableCell component="th" scope="row">
-                        {application.id}
-                      </TableCell>
-                      <TableCell>{application.customerName}</TableCell>
-                      <TableCell>{new Date(application.submittedDate).toLocaleDateString()}</TableCell>
-                      <TableCell>${application.loanAmount.toLocaleString()}</TableCell>
-                      <TableCell>{getStatusChip(application.status)}</TableCell>
-                      <TableCell align="right">
-                        <IconButton 
-                          size="small" 
-                          component={Link}
-                          to={`/applications/${application.id}`}
-                          title="View application"
-                        >
-                          <VisibilityIcon fontSize="small" />
-                        </IconButton>
-                      </TableCell>
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : error ? (
+            <Box sx={{ p: 3, textAlign: 'center' }}>
+              <Typography color="error">{error}</Typography>
+            </Box>
+          ) : (
+            <>
+              <TableContainer component={Paper} elevation={0}>
+                <Table sx={{ minWidth: 650 }} size="medium">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Application #</TableCell>
+                      <TableCell>Customer Name</TableCell>
+                      <TableCell>Submitted Date</TableCell>
+                      <TableCell>Amount</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell align="right">Actions</TableCell>
                     </TableRow>
-                  ))}
-                {filteredApplications.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
-                      <Typography variant="body1" color="text.secondary">
-                        No loan applications found matching your search
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          
-          <TablePagination
-            rowsPerPageOptions={[5, 10, 25]}
-            component="div"
-            count={filteredApplications.length}
-            rowsPerPage={rowsPerPage}
-            page={page}
-            onPageChange={handleChangePage}
-            onRowsPerPageChange={handleChangeRowsPerPage}
-          />
+                  </TableHead>
+                  <TableBody>
+                    {applications
+                      .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                      .map((application) => (
+                        <TableRow key={application.id}>
+                          <TableCell component="th" scope="row">
+                            {application.application_number}
+                          </TableCell>
+                          <TableCell>{application.customer_name}</TableCell>
+                          <TableCell>{new Date(application.created_at).toLocaleDateString()}</TableCell>
+                          <TableCell>${application.loan_amount.toLocaleString()}</TableCell>
+                          <TableCell>{getStatusChip(application.status)}</TableCell>
+                          <TableCell align="right">
+                            <IconButton 
+                              size="small" 
+                              component={Link}
+                              to={`/applications/${application.application_number}`}
+                              title="View application"
+                            >
+                              <VisibilityIcon fontSize="small" />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    {applications.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
+                          <Typography variant="body1" color="text.secondary">
+                            No loan applications found matching your search
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              
+              <TablePagination
+                rowsPerPageOptions={[5, 10, 25]}
+                component="div"
+                count={applications.length}
+                rowsPerPage={rowsPerPage}
+                page={page}
+                onPageChange={handleChangePage}
+                onRowsPerPageChange={handleChangeRowsPerPage}
+              />
+            </>
+          )}
         </CardContent>
       </Card>
     </div>

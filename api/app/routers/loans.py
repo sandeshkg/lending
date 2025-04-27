@@ -70,79 +70,31 @@ def create_loan_application(
     db_loan = models.LoanApplication(
         application_number=generate_application_number(),
         status=models.LoanStatus.PENDING,
+        vehicle_make=loan_application.vehicle_make,
+        vehicle_model=loan_application.vehicle_model,
+        vehicle_year=loan_application.vehicle_year,
+        vehicle_price=loan_application.vehicle_price,
         loan_amount=loan_application.loan_amount,
-        term_years=loan_application.term_years,
-        interest_rate=loan_application.interest_rate,
-        # Calculate monthly payment (simplified calculation)
-        monthly_payment=loan_application.loan_amount * (loan_application.interest_rate / 100 / 12) * \
-                        (1 + (loan_application.interest_rate / 100 / 12)) ** (loan_application.term_years * 12) / \
-                        ((1 + (loan_application.interest_rate / 100 / 12)) ** (loan_application.term_years * 12) - 1),
-        down_payment=loan_application.down_payment,
-        # Calculate LTV ratio
-        loan_to_value=loan_application.loan_amount / loan_application.vehicle_details.vehicle_value * 100
+        loan_term_months=loan_application.loan_term_months,
+        user_id=loan_application.user_id if hasattr(loan_application, 'user_id') else None,
     )
     db.add(db_loan)
-    db.flush()  # Flush to get the loan ID for relationships
-    
-    # Create primary borrower
-    primary_borrower = models.Borrower(
-        loan_id=db_loan.id,
-        is_co_borrower=False,
-        full_name=loan_application.primary_borrower.full_name,
-        email=loan_application.primary_borrower.email,
-        phone=loan_application.primary_borrower.phone,
-        credit_score=loan_application.primary_borrower.credit_score,
-        annual_income=loan_application.primary_borrower.annual_income,
-        employment_status=loan_application.primary_borrower.employment_status,
-        employer=loan_application.primary_borrower.employer,
-        years_at_job=loan_application.primary_borrower.years_at_job
-    )
-    db.add(primary_borrower)
-    
-    # Create co-borrower if provided
-    if loan_application.co_borrower:
-        co_borrower = models.Borrower(
-            loan_id=db_loan.id,
-            is_co_borrower=True,
-            full_name=loan_application.co_borrower.full_name,
-            email=loan_application.co_borrower.email,
-            phone=loan_application.co_borrower.phone,
-            credit_score=loan_application.co_borrower.credit_score,
-            annual_income=loan_application.co_borrower.annual_income,
-            employment_status=loan_application.co_borrower.employment_status,
-            employer=loan_application.co_borrower.employer,
-            years_at_job=loan_application.co_borrower.years_at_job
-        )
-        db.add(co_borrower)
-    
-    # Create vehicle details
-    vehicle_details = models.VehicleDetails(
-        loan_id=db_loan.id,
-        make=loan_application.vehicle_details.make,
-        model=loan_application.vehicle_details.model,
-        year=loan_application.vehicle_details.year,
-        vin=loan_application.vehicle_details.vin,
-        color=loan_application.vehicle_details.color,
-        mileage=loan_application.vehicle_details.mileage,
-        condition=loan_application.vehicle_details.condition,
-        vehicle_value=loan_application.vehicle_details.vehicle_value
-    )
-    db.add(vehicle_details)
     
     # Add timeline event for application creation
-    timeline_event = models.TimelineEvent(
-        loan_id=db_loan.id,
-        event="Loan application submitted",
-        user="System",
-        type=models.TimelineEventType.INFO
-    )
-    db.add(timeline_event)
+    if db_loan.id:
+        timeline_event = models.TimelineEvent(
+            loan_id=db_loan.id,
+            event="Loan application submitted",
+            user="System",
+            type=models.TimelineEventType.INFO
+        )
+        db.add(timeline_event)
     
     db.commit()
     db.refresh(db_loan)
     return db_loan
 
-@router.get("/{application_id}", response_model=schemas.LoanApplicationResponse)
+@router.get("/{application_id}", response_model=schemas.LoanApplicationDetail)
 def get_loan_application(
     application_id: str, 
     db: Session = Depends(get_db)
@@ -276,3 +228,53 @@ def add_timeline_event(
     db.refresh(db_event)
     
     return db_event
+
+# New endpoints for borrowers and vehicle details
+@router.get("/{application_id}/borrowers", response_model=List[schemas.BorrowerResponse])
+def get_loan_borrowers(
+    application_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Get all borrowers for a loan application
+    """
+    # Find loan
+    if application_id.isdigit():
+        db_loan = db.query(models.LoanApplication).filter(
+            models.LoanApplication.id == int(application_id)
+        ).first()
+    else:
+        db_loan = db.query(models.LoanApplication).filter(
+            models.LoanApplication.application_number == application_id
+        ).first()
+    
+    if db_loan is None:
+        raise HTTPException(status_code=404, detail="Loan application not found")
+    
+    return db_loan.borrowers
+
+@router.get("/{application_id}/vehicle", response_model=schemas.VehicleDetailsResponse)
+def get_loan_vehicle_details(
+    application_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Get vehicle details for a loan application
+    """
+    # Find loan
+    if application_id.isdigit():
+        db_loan = db.query(models.LoanApplication).filter(
+            models.LoanApplication.id == int(application_id)
+        ).first()
+    else:
+        db_loan = db.query(models.LoanApplication).filter(
+            models.LoanApplication.application_number == application_id
+        ).first()
+    
+    if db_loan is None:
+        raise HTTPException(status_code=404, detail="Loan application not found")
+    
+    if db_loan.vehicle_details is None:
+        raise HTTPException(status_code=404, detail="Vehicle details not found")
+    
+    return db_loan.vehicle_details

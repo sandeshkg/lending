@@ -56,7 +56,6 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
     { text: 'Upload Documents', icon: <UploadFileIcon />, path: '/upload' },
     { text: 'My Documents', icon: <FolderIcon />, path: '/documents' },
     { text: 'Loan Applications', icon: <AssignmentIcon />, path: '/applications' },
-    { text: 'Clients', icon: <PeopleIcon />, path: '/clients' },
     { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
   ];
 
@@ -74,7 +73,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
       }}>
         {isOpen && (
           <Typography variant="h6" color="primary" sx={{ fontWeight: 'bold' }}>
-            Loan Document AI
+            Vehicle Lending
           </Typography>
         )}
         <IconButton onClick={toggleSidebar}>

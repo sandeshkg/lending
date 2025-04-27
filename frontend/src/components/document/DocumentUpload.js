@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   Typography, 
   Paper, 
@@ -16,33 +17,47 @@ import {
   Step,
   StepLabel,
   Alert,
-  CircularProgress
+  CircularProgress,
+  TextField
 } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import documentService from '../../services/documentService';
+import loanService from '../../services/loanService';
 
 const DocumentUpload = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const loanId = searchParams.get('loanId');
+
   const [files, setFiles] = useState([]);
   const [dragActive, setDragActive] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const [completed, setCompleted] = useState(false);
+  const [loan, setLoan] = useState(null);
+  const [error, setError] = useState(null);
   
   const steps = ['Select Documents', 'Process & Validate', 'Review Results'];
   
-  // Document types we accept for loans
-  const documentTypes = [
-    'W-2 Forms',
-    'Tax Returns',
-    'Bank Statements',
-    'Pay Stubs',
-    'Credit Reports',
-    'Property Deed',
-    'Proof of Insurance',
-    'Identity Verification'
-  ];
+  // Fetch loan information if loanId is provided
+  useEffect(() => {
+    const fetchLoanData = async () => {
+      if (loanId) {
+        try {
+          const data = await loanService.getLoan(loanId);
+          setLoan(data);
+        } catch (err) {
+          console.error('Error fetching loan data:', err);
+          setError('Error loading loan information. Please try again.');
+        }
+      }
+    };
+    
+    fetchLoanData();
+  }, [loanId]);
 
   const handleDrag = (e) => {
     e.preventDefault();
@@ -77,7 +92,8 @@ const DocumentUpload = () => {
       size: file.size,
       type: file.type,
       uploadDate: new Date(),
-      status: 'ready'
+      status: 'ready',
+      documentType: ''
     }));
     
     setFiles(prevFiles => [...prevFiles, ...newFiles]);
@@ -95,29 +111,64 @@ const DocumentUpload = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const processDocuments = () => {
+  const handleDocumentTypeChange = (index, value) => {
+    setFiles(prevFiles => 
+      prevFiles.map((file, i) => 
+        i === index ? { ...file, documentType: value } : file
+      )
+    );
+  };
+
+  const processDocuments = async () => {
+    if (!loanId) {
+      setError('No loan ID provided. Cannot upload documents.');
+      return;
+    }
+
     setProcessing(true);
     
-    // Simulate document processing with AI
-    setTimeout(() => {
-      setFiles(prevFiles => 
-        prevFiles.map(file => ({
-          ...file,
-          status: Math.random() > 0.8 ? 'issues' : 'validated', // Simulate some files having issues
-          documentType: documentTypes[Math.floor(Math.random() * documentTypes.length)],
-          confidence: Math.floor(Math.random() * 20) + 80 // Random confidence score between 80-100
-        }))
-      );
+    try {
+      // Upload each file to the API
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        
+        // Skip files that don't have a document type assigned
+        if (!file.documentType) continue;
+        
+        await documentService.uploadDocument(
+          loanId,
+          file.documentType,
+          file.file
+        );
+        
+        // Update status
+        setFiles(prevFiles => 
+          prevFiles.map((f, index) => 
+            index === i ? { ...f, status: Math.random() > 0.8 ? 'issues' : 'validated' } : f
+          )
+        );
+      }
       
-      setProcessing(false);
       setActiveStep(1);
-    }, 3000);
+    } catch (err) {
+      console.error('Error uploading documents:', err);
+      setError('Failed to upload one or more documents. Please try again.');
+    } finally {
+      setProcessing(false);
+    }
   };
   
   const handleReview = () => {
     setActiveStep(2);
     setTimeout(() => {
       setCompleted(true);
+      
+      // Redirect to loan details if we have a loanId
+      if (loanId) {
+        setTimeout(() => {
+          navigate(`/applications/${loan.application_number}?tab=1`);
+        }, 2000);
+      }
     }, 1500);
   };
 
@@ -134,11 +185,37 @@ const DocumentUpload = () => {
     }
   };
 
+  // Document types we accept for loans
+  const documentTypes = [
+    'W-2 Forms', 
+    'Tax Returns',
+    'Bank Statements',
+    'Pay Stubs',
+    'Credit Reports',
+    'Property Deed',
+    'Proof of Insurance',
+    'Driver License',
+    'Vehicle Title',
+    'Purchase Agreement'
+  ];
+
   return (
     <div>
       <Typography variant="h4" gutterBottom>
         Upload Loan Documents
       </Typography>
+      
+      {loan && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          Uploading documents for loan application: <strong>{loan.application_number}</strong>
+        </Alert>
+      )}
+      
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error}
+        </Alert>
+      )}
       
       {/* Stepper */}
       <Box sx={{ width: '100%', mb: 4 }}>
@@ -156,6 +233,7 @@ const DocumentUpload = () => {
         {completed && (
           <Alert severity="success" sx={{ mb: 3 }}>
             Documents processed successfully! Your loan application is now under review.
+            {loanId && <Box mt={1}>You will be redirected to the loan details page shortly.</Box>}
           </Alert>
         )}
         
@@ -239,7 +317,29 @@ const DocumentUpload = () => {
                         </ListItemIcon>
                         <ListItemText 
                           primary={file.name} 
-                          secondary={formatFileSize(file.size)} 
+                          secondary={
+                            <>
+                              {formatFileSize(file.size)}
+                              <TextField
+                                select
+                                label="Document Type"
+                                value={file.documentType}
+                                onChange={(e) => handleDocumentTypeChange(index, e.target.value)}
+                                size="small"
+                                sx={{ ml: 2, minWidth: 150 }}
+                                SelectProps={{
+                                  native: true,
+                                }}
+                              >
+                                <option value=""></option>
+                                {documentTypes.map((option) => (
+                                  <option key={option} value={option}>
+                                    {option}
+                                  </option>
+                                ))}
+                              </TextField>
+                            </>
+                          } 
                         />
                         {getFileStatusChip(file.status)}
                       </ListItem>
@@ -250,7 +350,7 @@ const DocumentUpload = () => {
                     <Button
                       variant="contained"
                       onClick={processDocuments}
-                      disabled={files.length === 0 || processing}
+                      disabled={files.length === 0 || processing || !loanId}
                       startIcon={processing ? <CircularProgress size={20} /> : <CloudUploadIcon />}
                     >
                       {processing ? 'Processing...' : 'Process Documents'}
@@ -281,7 +381,7 @@ const DocumentUpload = () => {
                     </ListItemIcon>
                     <ListItemText 
                       primary={file.name} 
-                      secondary={`Identified as: ${file.documentType} (${file.confidence}% confidence)`} 
+                      secondary={`Identified as: ${file.documentType}`} 
                     />
                     {getFileStatusChip(file.status)}
                   </ListItem>

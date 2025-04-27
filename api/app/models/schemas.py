@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List, Union
 from datetime import datetime
 from app.models.models import LoanStatus, DocumentStatus, TimelineEventType
@@ -23,8 +23,7 @@ class User(UserBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}
 
 # Add the missing UserResponse schema used in the users.py router
 class UserResponse(BaseModel):
@@ -36,8 +35,40 @@ class UserResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}
+
+# Borrower schemas
+class BorrowerBase(BaseModel):
+    full_name: str
+    email: str
+    phone: str
+    credit_score: int = Field(..., ge=300, le=850)
+    annual_income: float = Field(..., gt=0)
+    employment_status: str
+    employer: str
+    years_at_job: float = Field(..., ge=0)
+    is_co_borrower: bool = False
+
+class BorrowerCreate(BorrowerBase):
+    loan_id: int
+
+class BorrowerUpdate(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    credit_score: Optional[int] = None
+    annual_income: Optional[float] = None
+    employment_status: Optional[str] = None
+    employer: Optional[str] = None
+    years_at_job: Optional[float] = None
+
+class BorrowerResponse(BorrowerBase):
+    id: int
+    loan_id: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
 
 # Document schemas
 class DocumentBase(BaseModel):
@@ -58,15 +89,13 @@ class Document(DocumentBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}
 
 # Add the missing DocumentResponse schema used in the documents.py router
 class DocumentResponse(Document):
     """Response model for document endpoints"""
     
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}
 
 # Timeline event schemas
 class TimelineEventBase(BaseModel):
@@ -82,16 +111,14 @@ class TimelineEvent(TimelineEventBase):
     loan_id: int
     created_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}
 
 class TimelineEventResponse(TimelineEventBase):
     id: int
     loan_id: int
     created_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}
 
 # Note schemas
 class NoteBase(BaseModel):
@@ -106,8 +133,39 @@ class NoteResponse(NoteBase):
     loan_id: int
     created_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}
+
+# Vehicle details schemas
+class VehicleDetailsBase(BaseModel):
+    make: str
+    model: str
+    year: int = Field(..., ge=1900, le=2100)
+    vin: str
+    color: str
+    mileage: int = Field(..., ge=0)
+    condition: str
+    vehicle_value: float = Field(..., gt=0)
+
+class VehicleDetailsCreate(VehicleDetailsBase):
+    loan_id: int
+
+class VehicleDetailsUpdate(BaseModel):
+    make: Optional[str] = None
+    model: Optional[str] = None
+    year: Optional[int] = None
+    vin: Optional[str] = None
+    color: Optional[str] = None
+    mileage: Optional[int] = None
+    condition: Optional[str] = None
+    vehicle_value: Optional[float] = None
+
+class VehicleDetailsResponse(VehicleDetailsBase):
+    id: int
+    loan_id: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
 
 # Loan application schemas
 class LoanApplicationBase(BaseModel):
@@ -118,14 +176,21 @@ class LoanApplicationBase(BaseModel):
     loan_amount: float = Field(..., gt=0)
     loan_term_months: int = Field(..., ge=12, le=84)
 
-    @validator('loan_amount')
-    def validate_loan_amount(cls, v, values):
-        if 'vehicle_price' in values and v > values['vehicle_price']:
+    @field_validator('loan_amount')
+    @classmethod
+    def validate_loan_amount(cls, v, info):
+        if 'vehicle_price' in info.data and v > info.data['vehicle_price']:
             raise ValueError('Loan amount cannot be greater than vehicle price')
         return v
 
 class LoanApplicationCreate(LoanApplicationBase):
-    pass
+    user_id: Optional[int] = None
+    primary_borrower: Optional[BorrowerBase] = None
+    co_borrower: Optional[BorrowerBase] = None
+    vehicle_details: Optional[VehicleDetailsBase] = None
+    down_payment: Optional[float] = None
+    term_years: Optional[int] = None
+    interest_rate: Optional[float] = None
 
 class LoanApplicationUpdate(BaseModel):
     vehicle_make: Optional[str] = None
@@ -146,8 +211,7 @@ class LoanApplicationSummary(BaseModel):
     created_at: datetime
     loan_amount: float
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}
 
 class LoanApplication(LoanApplicationBase):
     id: int
@@ -159,8 +223,7 @@ class LoanApplication(LoanApplicationBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}
 
 class LoanApplicationResponse(BaseModel):
     id: int
@@ -175,16 +238,17 @@ class LoanApplicationResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}
 
 class LoanApplicationDetail(LoanApplication):
-    user: User
-    documents: List["Document"] = []
-    timeline: List["TimelineEvent"] = []
+    user: Optional[User] = None
+    documents: List[Document] = []
+    timeline: List[TimelineEvent] = []
+    borrowers: List[BorrowerResponse] = []
+    vehicle_details: Optional[VehicleDetailsResponse] = None
+    notes: List[NoteResponse] = []
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}
 
 # Token schemas
 class Token(BaseModel):

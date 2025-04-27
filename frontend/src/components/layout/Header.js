@@ -25,7 +25,7 @@ const Header = ({ toggleSidebar }) => {
           component="div"
           sx={{ flexGrow: 1 }}
         >
-          LendingAI
+          Vehicle Lending
         </Typography>
         
         <Box sx={{ display: 'flex' }}>
