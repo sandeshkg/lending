@@ -594,7 +594,7 @@ const LoanDetails = () => {
 
             {loan.timeline && loan.timeline.length > 0 ? (
               <Timeline position="alternate">
-                {loan.timeline.map((event, index) => (
+                {[...loan.timeline].reverse().map((event, index) => (
                   <TimelineItem key={index}>
                     <TimelineOppositeContent color="text.secondary">
                       {new Date(event.created_at).toLocaleString()}

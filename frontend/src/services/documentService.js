@@ -25,7 +25,7 @@ const documentService = {
         },
       });
       
-      return response.data;
+      return response.data; // Returns document details stored in DB (id, loan_id, name, file_path, status)
     } catch (error) {
       throw error;
     }
@@ -35,7 +35,7 @@ const documentService = {
   updateDocumentStatus: async (documentId, updateData) => {
     try {
       const response = await api.put(`/documents/${documentId}`, updateData);
-      return response.data;
+      return response.data; // Returns updated document details from DB
     } catch (error) {
       throw error;
     }
@@ -45,7 +45,17 @@ const documentService = {
   getDocument: async (documentId) => {
     try {
       const response = await api.get(`/documents/detail/${documentId}`);
-      return response.data;
+      return response.data; // Returns document details from DB including id, loan_id, name, file_path, status
+    } catch (error) {
+      throw error;
+    }
+  },
+  
+  // Delete a document by ID
+  deleteDocument: async (documentId) => {
+    try {
+      const response = await api.delete(`/documents/${documentId}`);
+      return response.data; // Backend already handles both DB record and file system deletion
     } catch (error) {
       throw error;
     }

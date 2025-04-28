@@ -18,12 +18,21 @@ import {
   StepLabel,
   Alert,
   CircularProgress,
-  TextField
+  TextField,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  IconButton,
+  Divider
 } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import ZoomInIcon from '@mui/icons-material/ZoomIn';
+import ZoomOutIcon from '@mui/icons-material/ZoomOut';
+import CloseIcon from '@mui/icons-material/Close';
 import documentService from '../../services/documentService';
 import loanService from '../../services/loanService';
 
@@ -33,12 +42,18 @@ const DocumentUpload = () => {
   const loanId = searchParams.get('loanId');
 
   const [files, setFiles] = useState([]);
+  const [uploadedDocs, setUploadedDocs] = useState([]);
   const [dragActive, setDragActive] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const [completed, setCompleted] = useState(false);
   const [loan, setLoan] = useState(null);
   const [error, setError] = useState(null);
+  
+  // Document preview states
+  const [previewFile, setPreviewFile] = useState(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(100);
   
   const steps = ['Select Documents', 'Process & Validate', 'Review Results'];
   
@@ -49,6 +64,10 @@ const DocumentUpload = () => {
         try {
           const data = await loanService.getLoan(loanId);
           setLoan(data);
+          
+          // Also fetch existing documents for this loan
+          const documents = await documentService.getDocuments(loanId);
+          setUploadedDocs(documents);
         } catch (err) {
           console.error('Error fetching loan data:', err);
           setError('Error loading loan information. Please try again.');
@@ -59,6 +78,8 @@ const DocumentUpload = () => {
     fetchLoanData();
   }, [loanId]);
 
+  // Rest of existing drag and drop handlers
+  // ...existing code...
   const handleDrag = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -126,6 +147,7 @@ const DocumentUpload = () => {
     }
 
     setProcessing(true);
+    const uploadResults = [];
     
     try {
       // Upload each file to the API
@@ -135,19 +157,25 @@ const DocumentUpload = () => {
         // Skip files that don't have a document type assigned
         if (!file.documentType) continue;
         
-        await documentService.uploadDocument(
+        // Store document in database and file system
+        const result = await documentService.uploadDocument(
           loanId,
           file.documentType,
           file.file
         );
         
+        uploadResults.push(result);
+        
         // Update status
         setFiles(prevFiles => 
           prevFiles.map((f, index) => 
-            index === i ? { ...f, status: Math.random() > 0.8 ? 'issues' : 'validated' } : f
+            index === i ? { ...f, status: 'validated', dbId: result.id } : f
           )
         );
       }
+      
+      // Add newly uploaded documents to the list
+      setUploadedDocs(prev => [...prev, ...uploadResults]);
       
       setActiveStep(1);
     } catch (err) {
@@ -196,8 +224,28 @@ const DocumentUpload = () => {
     'Proof of Insurance',
     'Driver License',
     'Vehicle Title',
-    'Purchase Agreement'
+    'Sale Contract'
   ];
+
+  // Document preview handlers
+  const openPreview = (file) => {
+    setPreviewFile(file);
+    setPreviewOpen(true);
+    setZoomLevel(100); // Reset zoom level
+  };
+
+  const closePreview = () => {
+    setPreviewOpen(false);
+    setPreviewFile(null);
+  };
+
+  const zoomIn = () => {
+    setZoomLevel(prev => Math.min(prev + 20, 200));
+  };
+  
+  const zoomOut = () => {
+    setZoomLevel(prev => Math.max(prev - 20, 40));
+  };
 
   return (
     <div>
@@ -217,6 +265,97 @@ const DocumentUpload = () => {
         </Alert>
       )}
       
+      {/* Document Preview Dialog */}
+      <Dialog
+        open={previewOpen}
+        onClose={closePreview}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="h6">
+              Document Preview: {previewFile?.name}
+            </Typography>
+            <Box>
+              <IconButton onClick={zoomOut} size="small">
+                <ZoomOutIcon />
+              </IconButton>
+              <Typography variant="body2" component="span" sx={{ mx: 1 }}>
+                {zoomLevel}%
+              </Typography>
+              <IconButton onClick={zoomIn} size="small">
+                <ZoomInIcon />
+              </IconButton>
+              <IconButton onClick={closePreview} size="small" sx={{ ml: 1 }}>
+                <CloseIcon />
+              </IconButton>
+            </Box>
+          </Box>
+        </DialogTitle>
+        <Divider />
+        <DialogContent>
+          {previewFile && (
+            <Box 
+              sx={{ 
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                minHeight: '60vh',
+                transform: `scale(${zoomLevel / 100})`,
+                transition: 'transform 0.2s ease'
+              }}
+            >
+              {previewFile.file ? (
+                previewFile.type.includes('image') ? (
+                  <img 
+                    src={URL.createObjectURL(previewFile.file)} 
+                    alt={previewFile.name} 
+                    style={{ maxWidth: '100%', maxHeight: '100%' }} 
+                  />
+                ) : previewFile.type === 'application/pdf' ? (
+                  <iframe 
+                    src={URL.createObjectURL(previewFile.file)} 
+                    title={previewFile.name}
+                    width="100%"
+                    height="500px"
+                    style={{ border: 'none' }}
+                  />
+                ) : (
+                  <Box 
+                    sx={{ 
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      border: '1px dashed #ccc',
+                      borderRadius: 1,
+                      backgroundColor: '#f9f9f9',
+                      p: 4
+                    }}
+                  >
+                    <InsertDriveFileIcon sx={{ fontSize: 120, color: 'rgba(25, 118, 210, 0.2)', mb: 2 }} />
+                    <Typography variant="h6" color="text.secondary">
+                      {previewFile.name}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                      Preview not available for this file type
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                      File type: {previewFile.type || 'Unknown'}
+                    </Typography>
+                  </Box>
+                )
+              ) : (
+                <Typography variant="body1" color="text.secondary">
+                  File preview not available
+                </Typography>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Stepper */}
       <Box sx={{ width: '100%', mb: 4 }}>
         <Stepper activeStep={activeStep}>
@@ -229,6 +368,37 @@ const DocumentUpload = () => {
       </Box>
       
       <div className="upload-container">
+        {/* Already uploaded documents section */}
+        {uploadedDocs.length > 0 && activeStep === 0 && (
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Existing Documents ({uploadedDocs.length})
+              </Typography>
+              <List>
+                {uploadedDocs.map((doc) => (
+                  <ListItem key={doc.id}>
+                    <ListItemIcon>
+                      <InsertDriveFileIcon />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary={doc.name} 
+                      secondary={`Uploaded: ${new Date(doc.created_at).toLocaleDateString()}`} 
+                    />
+                    <Chip 
+                      label={doc.status} 
+                      color={doc.status === 'pending' ? 'warning' : 
+                             doc.status === 'approved' ? 'success' : 'error'} 
+                      size="small" 
+                      sx={{ ml: 1 }}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            </CardContent>
+          </Card>
+        )}
+        
         {/* Upload success message */}
         {completed && (
           <Alert severity="success" sx={{ mb: 3 }}>
@@ -301,15 +471,26 @@ const DocumentUpload = () => {
                       <ListItem
                         key={index}
                         secondaryAction={
-                          <Button 
-                            edge="end" 
-                            onClick={() => removeFile(index)}
-                            startIcon={<DeleteIcon />}
-                            color="error"
-                            size="small"
-                          >
-                            Remove
-                          </Button>
+                          <Box>
+                            <IconButton 
+                              edge="end" 
+                              onClick={() => openPreview(file)}
+                              color="primary"
+                              size="small"
+                              sx={{ mr: 1 }}
+                            >
+                              <VisibilityIcon />
+                            </IconButton>
+                            <Button 
+                              edge="end" 
+                              onClick={() => removeFile(index)}
+                              startIcon={<DeleteIcon />}
+                              color="error"
+                              size="small"
+                            >
+                              Remove
+                            </Button>
+                          </Box>
                         }
                       >
                         <ListItemIcon>
@@ -350,10 +531,10 @@ const DocumentUpload = () => {
                     <Button
                       variant="contained"
                       onClick={processDocuments}
-                      disabled={files.length === 0 || processing || !loanId}
+                      disabled={files.length === 0 || processing || !loanId || !files.some(f => f.documentType)}
                       startIcon={processing ? <CircularProgress size={20} /> : <CloudUploadIcon />}
                     >
-                      {processing ? 'Processing...' : 'Process Documents'}
+                      {processing ? 'Processing...' : 'Upload Documents'}
                     </Button>
                   </Box>
                 </CardContent>
@@ -370,20 +551,30 @@ const DocumentUpload = () => {
                 Document Processing Results
               </Typography>
               <Typography variant="body2" color="text.secondary" paragraph>
-                Our AI has analyzed your documents. Please review the results:
+                Your documents have been uploaded and stored in the database. Please review the results:
               </Typography>
               
               <List>
-                {files.map((file, index) => (
+                {files.filter(f => f.dbId).map((file, index) => (
                   <ListItem key={index}>
                     <ListItemIcon>
                       <InsertDriveFileIcon />
                     </ListItemIcon>
                     <ListItemText 
                       primary={file.name} 
-                      secondary={`Identified as: ${file.documentType}`} 
+                      secondary={`Identified as: ${file.documentType} | Document ID: ${file.dbId}`} 
                     />
-                    {getFileStatusChip(file.status)}
+                    <Box sx={{ display: 'flex', alignItems: 'center', mr: 1 }}>
+                      <IconButton 
+                        onClick={() => openPreview(file)}
+                        color="primary"
+                        size="small"
+                        sx={{ mr: 1 }}
+                      >
+                        <VisibilityIcon />
+                      </IconButton>
+                      {getFileStatusChip(file.status)}
+                    </Box>
                   </ListItem>
                 ))}
               </List>

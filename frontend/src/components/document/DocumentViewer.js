@@ -113,6 +113,27 @@ const DocumentViewer = () => {
 
   // Create a back link that goes to the loan's documents tab if we have loan information
   const backLink = loan ? `/applications/${loan.application_number}?tab=1` : "/documents";
+  
+  // Function to get document file URL from file path
+  const getDocumentUrl = () => {
+    // Use the API baseURL to ensure we're hitting the Python backend
+    return `http://localhost:8000/api/documents/file/${document.id}`;
+  };
+  
+  // Determine document type from file path
+  const getDocumentType = (filePath) => {
+    if (!filePath) return 'unknown';
+    
+    const extension = filePath.split('.').pop().toLowerCase();
+    if (['pdf'].includes(extension)) return 'pdf';
+    if (['jpg', 'jpeg', 'png', 'gif'].includes(extension)) return 'image';
+    if (['doc', 'docx'].includes(extension)) return 'word';
+    if (['xls', 'xlsx'].includes(extension)) return 'excel';
+    return 'other';
+  };
+  
+  const documentType = getDocumentType(document?.file_path);
+  const documentUrl = getDocumentUrl(document?.file_path);
 
   return (
     <div>
@@ -170,7 +191,7 @@ const DocumentViewer = () => {
             </Box>
           </Paper>
           
-          {/* This would be replaced by an actual document preview in a production app */}
+          {/* Document Preview Content */}
           <Box 
             sx={{ 
               height: '100%',
@@ -186,16 +207,56 @@ const DocumentViewer = () => {
               transition: 'transform 0.2s ease'
             }}
           >
-            <DescriptionIcon sx={{ fontSize: 120, color: 'rgba(25, 118, 210, 0.2)', mb: 2 }} />
-            <Typography variant="h6" color="text.secondary">
-              {document.name} Preview
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              In a real application, the actual document would be displayed here
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              File path: {document.file_path}
-            </Typography>
+            {documentType === 'pdf' ? (
+              <object 
+                data={documentUrl}
+                type="application/pdf"
+                width="100%"
+                height="600px"
+                style={{ border: 'none' }}
+              >
+                <iframe 
+                  src={documentUrl}
+                  title={document.name}
+                  width="100%"
+                  height="600px"
+                  style={{ border: 'none' }}
+                />
+              </object>
+            ) : documentType === 'image' ? (
+              <img 
+                src={documentUrl}
+                alt={document.name}
+                style={{ 
+                  maxWidth: '100%', 
+                  maxHeight: '600px',
+                  objectFit: 'contain' 
+                }}
+              />
+            ) : (
+              <Box sx={{ textAlign: 'center' }}>
+                <DescriptionIcon sx={{ fontSize: 120, color: 'rgba(25, 118, 210, 0.2)', mb: 2 }} />
+                <Typography variant="h6" color="text.secondary">
+                  {document.name}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  Preview not available for this file type
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  Type: {documentType} | File path: {document.file_path}
+                </Typography>
+                <Button
+                  variant="contained"
+                  href={documentUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  sx={{ mt: 2 }}
+                  startIcon={<DownloadIcon />}
+                >
+                  Download File
+                </Button>
+              </Box>
+            )}
           </Box>
         </div>
         
@@ -295,7 +356,21 @@ const DocumentViewer = () => {
                 )}
 
                 <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between' }}>
-                  <Button variant="outlined" color="error">
+                  <Button 
+                    variant="outlined" 
+                    color="error"
+                    onClick={async () => {
+                      if (window.confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+                        try {
+                          await documentService.deleteDocument(document.id);
+                          navigate(backLink);
+                        } catch (err) {
+                          console.error('Error deleting document:', err);
+                          setError('Failed to delete document. Please try again.');
+                        }
+                      }
+                    }}
+                  >
                     Delete Document
                   </Button>
                   
