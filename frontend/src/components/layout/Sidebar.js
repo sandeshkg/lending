@@ -53,8 +53,6 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
-    { text: 'Upload Documents', icon: <UploadFileIcon />, path: '/upload' },
-    { text: 'My Documents', icon: <FolderIcon />, path: '/documents' },
     { text: 'Loan Applications', icon: <AssignmentIcon />, path: '/applications' },
     { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
   ];

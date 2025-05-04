@@ -21,8 +21,15 @@ import {
   IconButton,
   LinearProgress,
   Alert,
-  CircularProgress
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle
 } from '@mui/material';
+import { styled } from '@mui/system';
+import Draggable from 'react-draggable';
 import DescriptionIcon from '@mui/icons-material/Description';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import WarningIcon from '@mui/icons-material/Warning';
@@ -30,9 +37,36 @@ import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import DownloadIcon from '@mui/icons-material/Download';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import AnalyticsIcon from '@mui/icons-material/Analytics';
+import CloseIcon from '@mui/icons-material/Close';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import { Link as RouterLink } from 'react-router-dom';
 import documentService from '../../services/documentService';
 import loanService from '../../services/loanService';
+
+// Draggable Paper Component for the Dialog
+function DraggablePaper(props) {
+  return (
+    <Draggable
+      handle=".draggable-dialog-title"
+      cancel={'[class*="MuiDialogContent-root"]'}
+    >
+      <Paper {...props} />
+    </Draggable>
+  );
+}
+
+// Styled component for the resizable dialog
+const ResizableDialog = styled(Dialog)(({ theme }) => ({
+  '& .MuiDialog-paper': {
+    minWidth: '500px',
+    minHeight: '400px',
+    maxWidth: '90vw',
+    maxHeight: '80vh',
+    resize: 'both',
+    overflow: 'auto',
+  },
+}));
 
 const DocumentViewer = () => {
   const { id } = useParams();
@@ -43,6 +77,10 @@ const DocumentViewer = () => {
   const [zoomLevel, setZoomLevel] = useState(100);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [extractionModalOpen, setExtractionModalOpen] = useState(false);
+  const [extractionLoading, setExtractionLoading] = useState(false);
+  const [extractionResult, setExtractionResult] = useState(null);
+  const [extractionError, setExtractionError] = useState(null);
   
   // Fetch document data when component mounts
   useEffect(() => {
@@ -80,6 +118,39 @@ const DocumentViewer = () => {
     setZoomLevel(prev => Math.max(prev - 20, 40));
   };
 
+  // Handle document extraction
+  const handleExtractInformation = async () => {
+    setExtractionLoading(true);
+    setExtractionError(null);
+    setExtractionModalOpen(true);
+    
+    try {
+      // Get analysis results from the LLM API
+      const result = await documentService.extractDocumentInfo(id);
+      console.log("LLM API Response:", result); // Debug the response
+      
+      // Ensure extractionResult is properly structured even if response format varies
+      const formattedResult = {
+        summary: result.summary || result.description || '',
+        entities: result.entities || [],
+        content: result.content || result.analysis || result.text || JSON.stringify(result, null, 2),
+        loan_application: result.loan_application || null
+      };
+      
+      setExtractionResult(formattedResult);
+    } catch (err) {
+      console.error('Error extracting document information:', err);
+      setExtractionError('Failed to extract information from the document. Please try again.');
+    } finally {
+      setExtractionLoading(false);
+    }
+  };
+
+  // Close the extraction modal
+  const handleCloseExtractionModal = () => {
+    setExtractionModalOpen(false);
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 4 }}>
@@ -106,10 +177,6 @@ const DocumentViewer = () => {
       </Box>
     );
   }
-
-  // Estimate confidence score based on document status
-  const confidenceScore = document.status === 'validated' ? 94 : 
-                         document.status === 'pending' ? 80 : 65;
 
   // Create a back link that goes to the loan's documents tab if we have loan information
   const backLink = loan ? `/applications/${loan.application_number}?tab=1` : "/documents";
@@ -140,7 +207,8 @@ const DocumentViewer = () => {
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
         <Button 
           component={RouterLink} 
-          to={backLink} 
+          to={backLink}
+          state={extractionResult?.loan_application ? { extractedData: extractionResult } : undefined}
           startIcon={<ArrowBackIcon />}
           sx={{ mr: 2 }}
         >
@@ -320,25 +388,6 @@ const DocumentViewer = () => {
                           />
                         </TableCell>
                       </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">AI Confidence</TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <Box sx={{ width: '100%', mr: 1 }}>
-                              <LinearProgress 
-                                variant="determinate" 
-                                value={confidenceScore} 
-                                color={confidenceScore > 90 ? "success" : confidenceScore > 70 ? "primary" : "warning"}
-                              />
-                            </Box>
-                            <Box>
-                              <Typography variant="body2" color="text.secondary">
-                                {`${confidenceScore}%`}
-                              </Typography>
-                            </Box>
-                          </Box>
-                        </TableCell>
-                      </TableRow>
                     </TableBody>
                   </Table>
                 </TableContainer>
@@ -355,7 +404,7 @@ const DocumentViewer = () => {
                   </Box>
                 )}
 
-                <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between' }}>
+                <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
                   <Button 
                     variant="outlined" 
                     color="error"
@@ -374,24 +423,14 @@ const DocumentViewer = () => {
                     Delete Document
                   </Button>
                   
-                  {document.status !== 'validated' && (
-                    <Button 
-                      variant="contained" 
-                      color="success"
-                      onClick={async () => {
-                        try {
-                          await documentService.updateDocumentStatus(document.id, {
-                            status: 'validated'
-                          });
-                          setDocument(prev => ({...prev, status: 'validated'}));
-                        } catch (err) {
-                          console.error('Error updating document status:', err);
-                        }
-                      }}
-                    >
-                      Validate Document
-                    </Button>
-                  )}
+                  <Button
+                    variant="contained"
+                    color="info"
+                    startIcon={<AnalyticsIcon />}
+                    onClick={handleExtractInformation}
+                  >
+                    Extract Information
+                  </Button>
                 </Box>
               </CardContent>
             )}
@@ -449,6 +488,432 @@ const DocumentViewer = () => {
           </Card>
         </div>
       </div>
+
+      {/* Information Extraction Modal */}
+      <ResizableDialog
+        open={extractionModalOpen}
+        onClose={handleCloseExtractionModal}
+        aria-labelledby="extraction-dialog-title"
+        aria-describedby="extraction-dialog-description"
+        PaperComponent={DraggablePaper}
+      >
+        <DialogTitle 
+          id="extraction-dialog-title" 
+          className="draggable-dialog-title"
+          sx={{ 
+            cursor: 'move',
+            paddingBottom: 1
+          }}
+        >
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <DragIndicatorIcon sx={{ mr: 1, color: 'text.secondary' }} />
+              <Typography variant="h6">Document Analysis Results</Typography>
+            </Box>
+            <IconButton edge="end" color="inherit" onClick={handleCloseExtractionModal} aria-label="close">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          {extractionLoading ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
+              <CircularProgress />
+              <Typography variant="body1" sx={{ mt: 2 }}>
+                Analyzing document with AI... This may take a few moments.
+              </Typography>
+            </Box>
+          ) : extractionResult ? (
+            <Box sx={{ overflow: 'auto' }}>
+              {extractionResult.summary && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" gutterBottom>Summary</Typography>
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    {extractionResult.summary}
+                  </Alert>
+                </Box>
+              )}
+              
+              {/* Display loan application data if available */}
+              {extractionResult.loan_application && (
+                <>
+                  <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
+                    Loan Application Details
+                  </Typography>
+                  
+                  <Grid container spacing={3}>
+                    {/* Borrower Information */}
+                    <Grid item xs={12} md={6}>
+                      <Card variant="outlined" sx={{ mb: 2 }}>
+                        <CardContent>
+                          <Typography variant="h6" gutterBottom>
+                            Borrower Information
+                          </Typography>
+                          <TableContainer>
+                            <Table size="small">
+                              <TableBody>
+                                {extractionResult.loan_application.borrowers && 
+                                 extractionResult.loan_application.borrowers.length > 0 && 
+                                 extractionResult.loan_application.borrowers.filter(b => !b.is_co_borrower).map((borrower, idx) => (
+                                  <React.Fragment key={idx}>
+                                    <TableRow>
+                                      <TableCell component="th" scope="row">Full Name</TableCell>
+                                      <TableCell>{borrower.full_name || 'N/A'}</TableCell>
+                                    </TableRow>
+                                    <TableRow>
+                                      <TableCell component="th" scope="row">Phone</TableCell>
+                                      <TableCell>{borrower.phone || 'N/A'}</TableCell>
+                                    </TableRow>
+                                    <TableRow>
+                                      <TableCell component="th" scope="row">Email</TableCell>
+                                      <TableCell>{borrower.email || 'N/A'}</TableCell>
+                                    </TableRow>
+                                    <TableRow>
+                                      <TableCell component="th" scope="row">Credit Score</TableCell>
+                                      <TableCell>{borrower.credit_score || 'N/A'}</TableCell>
+                                    </TableRow>
+                                    <TableRow>
+                                      <TableCell component="th" scope="row">Annual Income</TableCell>
+                                      <TableCell>
+                                        {borrower.annual_income 
+                                          ? `$${Number(borrower.annual_income).toLocaleString('en-US', {
+                                              minimumFractionDigits: 2,
+                                              maximumFractionDigits: 2
+                                            })}` 
+                                          : 'N/A'}
+                                      </TableCell>
+                                    </TableRow>
+                                    <TableRow>
+                                      <TableCell component="th" scope="row">Employment Status</TableCell>
+                                      <TableCell>{borrower.employment_status || 'N/A'}</TableCell>
+                                    </TableRow>
+                                    <TableRow>
+                                      <TableCell component="th" scope="row">Employer</TableCell>
+                                      <TableCell>{borrower.employer || 'N/A'}</TableCell>
+                                    </TableRow>
+                                    <TableRow>
+                                      <TableCell component="th" scope="row">Years at Current Job</TableCell>
+                                      <TableCell>{borrower.years_at_job || 'N/A'}</TableCell>
+                                    </TableRow>
+                                  </React.Fragment>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                    
+                    {/* Co-Borrower Information (if exists) */}
+                    <Grid item xs={12} md={6}>
+                      {extractionResult.loan_application.borrowers && 
+                       extractionResult.loan_application.borrowers.filter(b => b.is_co_borrower).length > 0 && (
+                        <Card variant="outlined" sx={{ mb: 2 }}>
+                          <CardContent>
+                            <Typography variant="h6" gutterBottom>
+                              Co-Borrower Information
+                            </Typography>
+                            <TableContainer>
+                              <Table size="small">
+                                <TableBody>
+                                  {extractionResult.loan_application.borrowers.filter(b => b.is_co_borrower).map((coBorrower, idx) => (
+                                    <React.Fragment key={idx}>
+                                      <TableRow>
+                                        <TableCell component="th" scope="row">Full Name</TableCell>
+                                        <TableCell>{coBorrower.full_name || 'N/A'}</TableCell>
+                                      </TableRow>
+                                      <TableRow>
+                                        <TableCell component="th" scope="row">Phone</TableCell>
+                                        <TableCell>{coBorrower.phone || 'N/A'}</TableCell>
+                                      </TableRow>
+                                      <TableRow>
+                                        <TableCell component="th" scope="row">Email</TableCell>
+                                        <TableCell>{coBorrower.email || 'N/A'}</TableCell>
+                                      </TableRow>
+                                      <TableRow>
+                                        <TableCell component="th" scope="row">Credit Score</TableCell>
+                                        <TableCell>{coBorrower.credit_score || 'N/A'}</TableCell>
+                                      </TableRow>
+                                      <TableRow>
+                                        <TableCell component="th" scope="row">Annual Income</TableCell>
+                                        <TableCell>
+                                          {coBorrower.annual_income 
+                                            ? `$${Number(coBorrower.annual_income).toLocaleString('en-US', {
+                                                minimumFractionDigits: 2,
+                                                maximumFractionDigits: 2
+                                              })}` 
+                                            : 'N/A'}
+                                        </TableCell>
+                                      </TableRow>
+                                      <TableRow>
+                                        <TableCell component="th" scope="row">Employment Status</TableCell>
+                                        <TableCell>{coBorrower.employment_status || 'N/A'}</TableCell>
+                                      </TableRow>
+                                      <TableRow>
+                                        <TableCell component="th" scope="row">Employer</TableCell>
+                                        <TableCell>{coBorrower.employer || 'N/A'}</TableCell>
+                                      </TableRow>
+                                      <TableRow>
+                                        <TableCell component="th" scope="row">Years at Current Job</TableCell>
+                                        <TableCell>{coBorrower.years_at_job || 'N/A'}</TableCell>
+                                      </TableRow>
+                                    </React.Fragment>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </TableContainer>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </Grid>
+                    
+                    {/* Loan Information */}
+                    <Grid item xs={12} md={6}>
+                      <Card variant="outlined" sx={{ mb: 2 }}>
+                        <CardContent>
+                          <Typography variant="h6" gutterBottom>
+                            Loan Information
+                          </Typography>
+                          <TableContainer>
+                            <Table size="small">
+                              <TableBody>
+                                <TableRow>
+                                  <TableCell component="th" scope="row">Loan Type</TableCell>
+                                  <TableCell>{extractionResult.loan_application.loan_type || 'Vehicle Loan'}</TableCell>
+                                </TableRow>
+                                <TableRow>
+                                  <TableCell component="th" scope="row">Loan Amount</TableCell>
+                                  <TableCell>
+                                    {extractionResult.loan_application.loan_amount
+                                      ? `$${Number(extractionResult.loan_application.loan_amount).toLocaleString('en-US', {
+                                          minimumFractionDigits: 2,
+                                          maximumFractionDigits: 2
+                                        })}`
+                                      : 'N/A'}
+                                  </TableCell>
+                                </TableRow>
+                                <TableRow>
+                                  <TableCell component="th" scope="row">Term</TableCell>
+                                  <TableCell>
+                                    {extractionResult.loan_application.loan_term_months
+                                      ? `${Math.round(extractionResult.loan_application.loan_term_months / 12)} years`
+                                      : 'N/A'}
+                                  </TableCell>
+                                </TableRow>
+                                <TableRow>
+                                  <TableCell component="th" scope="row">Interest Rate</TableCell>
+                                  <TableCell>
+                                    {extractionResult.loan_application.interest_rate
+                                      ? `${extractionResult.loan_application.interest_rate}%`
+                                      : 'N/A'}
+                                  </TableCell>
+                                </TableRow>
+                                <TableRow>
+                                  <TableCell component="th" scope="row">Monthly Payment</TableCell>
+                                  <TableCell>
+                                    {extractionResult.loan_application.monthly_payment
+                                      ? `$${Number(extractionResult.loan_application.monthly_payment).toLocaleString('en-US', {
+                                          minimumFractionDigits: 2,
+                                          maximumFractionDigits: 2
+                                        })}`
+                                      : 'N/A'}
+                                  </TableCell>
+                                </TableRow>
+                                <TableRow>
+                                  <TableCell component="th" scope="row">Down Payment</TableCell>
+                                  <TableCell>
+                                    {extractionResult.loan_application.down_payment
+                                      ? `$${Number(extractionResult.loan_application.down_payment).toLocaleString('en-US')}`
+                                      : 'N/A'}
+                                  </TableCell>
+                                </TableRow>
+                                <TableRow>
+                                  <TableCell component="th" scope="row">Loan-to-Value Ratio</TableCell>
+                                  <TableCell>
+                                    {extractionResult.loan_application.ltv_ratio
+                                      ? `${extractionResult.loan_application.ltv_ratio}%`
+                                      : 'N/A'}
+                                  </TableCell>
+                                </TableRow>
+                                <TableRow>
+                                  <TableCell component="th" scope="row">Application Date</TableCell>
+                                  <TableCell>
+                                    {extractionResult.loan_application.application_date
+                                      ? new Date(extractionResult.loan_application.application_date).toLocaleDateString()
+                                      : 'N/A'}
+                                  </TableCell>
+                                </TableRow>
+                                <TableRow>
+                                  <TableCell component="th" scope="row">Status</TableCell>
+                                  <TableCell>
+                                    <Chip
+                                      label={extractionResult.loan_application.status || 'Pending Review'}
+                                      color={
+                                        extractionResult.loan_application.status === 'approved' ? 'success' :
+                                        extractionResult.loan_application.status === 'rejected' ? 'error' : 'primary'
+                                      }
+                                      size="small"
+                                    />
+                                  </TableCell>
+                                </TableRow>
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                    
+                    {/* Vehicle Information */}
+                    <Grid item xs={12} md={6}>
+                      <Card variant="outlined" sx={{ mb: 2 }}>
+                        <CardContent>
+                          <Typography variant="h6" gutterBottom>
+                            Vehicle Information
+                          </Typography>
+                          <TableContainer>
+                            <Table size="small">
+                              <TableBody>
+                                {extractionResult.loan_application.vehicle_details ? (
+                                  <>
+                                    <TableRow>
+                                      <TableCell component="th" scope="row">Make</TableCell>
+                                      <TableCell>{extractionResult.loan_application.vehicle_details.make || 'N/A'}</TableCell>
+                                    </TableRow>
+                                    <TableRow>
+                                      <TableCell component="th" scope="row">Model</TableCell>
+                                      <TableCell>{extractionResult.loan_application.vehicle_details.model || 'N/A'}</TableCell>
+                                    </TableRow>
+                                    <TableRow>
+                                      <TableCell component="th" scope="row">Year</TableCell>
+                                      <TableCell>{extractionResult.loan_application.vehicle_details.year || 'N/A'}</TableCell>
+                                    </TableRow>
+                                    <TableRow>
+                                      <TableCell component="th" scope="row">VIN</TableCell>
+                                      <TableCell>{extractionResult.loan_application.vehicle_details.vin || 'N/A'}</TableCell>
+                                    </TableRow>
+                                    <TableRow>
+                                      <TableCell component="th" scope="row">Color</TableCell>
+                                      <TableCell>{extractionResult.loan_application.vehicle_details.color || 'N/A'}</TableCell>
+                                    </TableRow>
+                                    <TableRow>
+                                      <TableCell component="th" scope="row">Mileage</TableCell>
+                                      <TableCell>
+                                        {extractionResult.loan_application.vehicle_details.mileage
+                                          ? `${Number(extractionResult.loan_application.vehicle_details.mileage).toLocaleString()} miles`
+                                          : 'N/A'}
+                                      </TableCell>
+                                    </TableRow>
+                                    <TableRow>
+                                      <TableCell component="th" scope="row">Condition</TableCell>
+                                      <TableCell>{extractionResult.loan_application.vehicle_details.condition || 'N/A'}</TableCell>
+                                    </TableRow>
+                                    <TableRow>
+                                      <TableCell component="th" scope="row">Vehicle Value</TableCell>
+                                      <TableCell>
+                                        {extractionResult.loan_application.vehicle_details.vehicle_value
+                                          ? `$${Number(extractionResult.loan_application.vehicle_details.vehicle_value).toLocaleString('en-US', {
+                                              minimumFractionDigits: 2,
+                                              maximumFractionDigits: 2
+                                            })}`
+                                          : 'N/A'}
+                                      </TableCell>
+                                    </TableRow>
+                                  </>
+                                ) : (
+                                  <>
+                                    <TableRow>
+                                      <TableCell component="th" scope="row">Make</TableCell>
+                                      <TableCell>{extractionResult.loan_application.vehicle_make || 'N/A'}</TableCell>
+                                    </TableRow>
+                                    <TableRow>
+                                      <TableCell component="th" scope="row">Model</TableCell>
+                                      <TableCell>{extractionResult.loan_application.vehicle_model || 'N/A'}</TableCell>
+                                    </TableRow>
+                                    <TableRow>
+                                      <TableCell component="th" scope="row">Year</TableCell>
+                                      <TableCell>{extractionResult.loan_application.vehicle_year || 'N/A'}</TableCell>
+                                    </TableRow>
+                                    <TableRow>
+                                      <TableCell component="th" scope="row">Vehicle Value</TableCell>
+                                      <TableCell>
+                                        {extractionResult.loan_application.vehicle_price
+                                          ? `$${Number(extractionResult.loan_application.vehicle_price).toLocaleString('en-US', {
+                                              minimumFractionDigits: 2,
+                                              maximumFractionDigits: 2
+                                            })}`
+                                          : 'N/A'}
+                                      </TableCell>
+                                    </TableRow>
+                                  </>
+                                )}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  </Grid>
+                </>
+              )}
+              
+              {/* Display extracted entities */}
+              {extractionResult.entities && extractionResult.entities.length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" gutterBottom>Extracted Entities</Typography>
+                  <TableContainer component={Paper} variant="outlined">
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell><strong>Entity</strong></TableCell>
+                          <TableCell><strong>Value</strong></TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {extractionResult.entities.map((entity, index) => (
+                          <TableRow key={index}>
+                            <TableCell>{entity.label || entity.type}</TableCell>
+                            <TableCell>{entity.value}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              )}
+              
+              {/* Display full analysis content */}
+              {extractionResult.content && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" gutterBottom>Full Analysis</Typography>
+                  <Paper variant="outlined" sx={{ p: 2, whiteSpace: 'pre-wrap', maxHeight: '300px', overflow: 'auto' }}>
+                    {extractionResult.content}
+                  </Paper>
+                </Box>
+              )}
+
+              {/* Fallback if the response doesn't match expected format */}
+              {!extractionResult.summary && !extractionResult.content && !extractionResult.loan_application && 
+               extractionResult.entities?.length === 0 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" gutterBottom>Raw Response</Typography>
+                  <Paper variant="outlined" sx={{ p: 2, whiteSpace: 'pre-wrap', maxHeight: '400px', overflow: 'auto' }}>
+                    {typeof extractionResult === 'object' 
+                      ? JSON.stringify(extractionResult, null, 2)
+                      : String(extractionResult)}
+                  </Paper>
+                </Box>
+              )}
+            </Box>
+          ) : (
+            <Typography>No analysis results available. Try extracting information again.</Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseExtractionModal} color="primary">
+            Close
+          </Button>
+        </DialogActions>
+      </ResizableDialog>
     </div>
   );
 };

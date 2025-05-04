@@ -75,3 +75,5 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/t
 cd /home/developer/code/lending/api && poetry run uvicorn app.main:app --reload
 
 cd /home/developer/code/lending/frontend && npm start
+
+cd /home/developer/code/lending/llm_integrations/api && poetry run python3 run.py --reload

@@ -34,6 +34,7 @@ class User(Base):
     full_name = Column(String)
     is_active = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)
+    lending_authority_level = Column(Integer, default=1)  # New field for lending authority level (1-8)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

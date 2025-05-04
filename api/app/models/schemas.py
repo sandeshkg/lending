@@ -32,6 +32,7 @@ class UserResponse(BaseModel):
     full_name: str
     is_active: bool
     is_admin: bool
+    lending_authority_level: int = 1
     created_at: datetime
     updated_at: datetime
 
@@ -249,6 +250,10 @@ class LoanApplicationDetail(LoanApplication):
     notes: List[NoteResponse] = []
 
     model_config = {"from_attributes": True}
+
+# Authority level schema
+class AuthorityLevelUpdate(BaseModel):
+    lending_authority_level: int = Field(..., ge=1, le=8)
 
 # Token schemas
 class Token(BaseModel):

@@ -10,16 +10,12 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.database.db import engine
-from app.models.models import Base, Borrower, VehicleDetails, Note
+from app.models.models import Base, User, Borrower, VehicleDetails, Note
 
 def update_database():
-    print("Creating missing tables in the database...")
-    # Create tables for Borrower, VehicleDetails, and Note if they don't exist
-    Base.metadata.create_all(bind=engine, tables=[
-        Borrower.__table__, 
-        VehicleDetails.__table__,
-        Note.__table__
-    ])
+    print("Updating database schema...")
+    # Create all tables that don't exist and update schema for existing tables
+    Base.metadata.create_all(bind=engine)
     print("Database schema updated successfully!")
 
 if __name__ == "__main__":

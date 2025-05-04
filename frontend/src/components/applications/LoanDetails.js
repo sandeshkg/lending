@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useLocation } from 'react-router-dom';
 import {
   Typography,
   Box,
@@ -27,7 +27,8 @@ import {
   Stack,
   Alert,
   CircularProgress,
-  TextField
+  TextField,
+  Tooltip
 } from '@mui/material';
 import {
   Timeline,
@@ -51,11 +52,13 @@ import WarningIcon from '@mui/icons-material/Warning';
 import EditIcon from '@mui/icons-material/Edit';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import DownloadIcon from '@mui/icons-material/Download';
+import InfoIcon from '@mui/icons-material/Info';
 import loanService from '../../services/loanService';
 import documentService from '../../services/documentService';
 
 const LoanDetails = () => {
   const { id } = useParams();
+  const location = useLocation();
   const [loan, setLoan] = useState(null);
   const [currentTab, setCurrentTab] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -63,6 +66,7 @@ const LoanDetails = () => {
   const [documents, setDocuments] = useState([]);
   const [newNote, setNewNote] = useState({ author: '', content: '' });
   const [submittingNote, setSubmittingNote] = useState(false);
+  const [extractedData, setExtractedData] = useState(null);
 
   // Fetch loan details from API
   useEffect(() => {
@@ -87,6 +91,116 @@ const LoanDetails = () => {
 
     fetchLoanDetails();
   }, [id]);
+
+  // Check if there's document analysis data in the location state
+  useEffect(() => {
+    if (location.state?.extractedData?.loan_application) {
+      setExtractedData(location.state.extractedData.loan_application);
+      
+      // If we came back with document data, automatically show the application details tab
+      setCurrentTab(0);
+    }
+  }, [location.state]);
+
+  // Reusable function to determine if a field has a discrepancy with extracted data
+  const getDiscrepancyInfo = (fieldType, fieldName, originalValue, parentField = null) => {
+    if (!extractedData) return null;
+    
+    let extractedValue;
+    
+    // Handle nested fields for borrowers and vehicle details
+    if (parentField === 'borrower' && extractedData.borrowers && extractedData.borrowers.length > 0) {
+      // Get the primary borrower
+      const primaryBorrower = extractedData.borrowers.find(b => !b.is_co_borrower);
+      if (primaryBorrower && primaryBorrower[fieldName] !== undefined) {
+        extractedValue = primaryBorrower[fieldName];
+      }
+    } else if (parentField === 'coBorrower' && extractedData.borrowers && extractedData.borrowers.length > 1) {
+      // Get the co-borrower
+      const coBorrower = extractedData.borrowers.find(b => b.is_co_borrower);
+      if (coBorrower && coBorrower[fieldName] !== undefined) {
+        extractedValue = coBorrower[fieldName];
+      }
+    } else if (parentField === 'vehicle' && extractedData.vehicle_details) {
+      extractedValue = extractedData.vehicle_details[fieldName];
+    } else if (fieldName === 'vehicle_make') {
+      extractedValue = extractedData.vehicle_details?.make || extractedData.vehicle_make;
+    } else if (fieldName === 'vehicle_model') {
+      extractedValue = extractedData.vehicle_details?.model || extractedData.vehicle_model;
+    } else if (fieldName === 'vehicle_year') {
+      extractedValue = extractedData.vehicle_details?.year || extractedData.vehicle_year;
+    } else {
+      extractedValue = extractedData[fieldName];
+    }
+    
+    // For some fields we need special comparison logic
+    let hasDiscrepancy = false;
+    
+    if (extractedValue !== undefined && extractedValue !== null) {
+      if (fieldType === 'currency') {
+        // Convert both to numbers for comparison and ignore formatting differences
+        const origValue = typeof originalValue === 'number' ? originalValue : parseFloat(String(originalValue).replace(/[^0-9.-]+/g, ''));
+        const extValue = typeof extractedValue === 'number' ? extractedValue : parseFloat(String(extractedValue).replace(/[^0-9.-]+/g, ''));
+        hasDiscrepancy = Math.abs(origValue - extValue) > 1; // Allow for minor rounding differences
+      } else if (fieldType === 'percentage') {
+        // Convert both to numbers for comparison
+        const origValue = typeof originalValue === 'number' ? originalValue : parseFloat(String(originalValue).replace(/[^0-9.-]+/g, ''));
+        const extValue = typeof extractedValue === 'number' ? extractedValue : parseFloat(String(extractedValue).replace(/[^0-9.-]+/g, ''));
+        hasDiscrepancy = Math.abs(origValue - extValue) > 0.1; // Allow for minor rounding differences
+      } else if (fieldType === 'string') {
+        // Case-insensitive string comparison, trimmed
+        hasDiscrepancy = String(originalValue).trim().toLowerCase() !== String(extractedValue).trim().toLowerCase();
+      } else {
+        // Default comparison
+        hasDiscrepancy = originalValue != extractedValue; // Loose comparison to handle type differences
+      }
+    }
+    
+    if (hasDiscrepancy) {
+      // Format the extracted value for display in the tooltip
+      let formattedValue;
+      if (fieldType === 'currency') {
+        formattedValue = typeof extractedValue === 'number' ? 
+          `$${extractedValue.toLocaleString()}` : 
+          extractedValue;
+      } else if (fieldType === 'percentage') {
+        formattedValue = typeof extractedValue === 'number' ? 
+          `${extractedValue}%` : 
+          extractedValue;
+      } else {
+        formattedValue = extractedValue;
+      }
+      
+      return {
+        hasDiscrepancy,
+        extractedValue: formattedValue
+      };
+    }
+    
+    return null;
+  };
+
+  // Render a field with discrepancy icon if there's a difference
+  const renderFieldWithDiscrepancy = (fieldValue, fieldType, fieldName, parentField = null) => {
+    const discrepancy = getDiscrepancyInfo(fieldType, fieldName, fieldValue, parentField);
+    
+    if (discrepancy) {
+      return (
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          {fieldType === 'currency' && typeof fieldValue === 'number' ? `$${fieldValue.toLocaleString()}` : fieldValue}
+          <Tooltip title={`Document shows: ${discrepancy.extractedValue}`} arrow>
+            <InfoIcon sx={{ ml: 1, color: 'warning.main', fontSize: 18 }} />
+          </Tooltip>
+        </Box>
+      );
+    }
+    
+    if (fieldType === 'currency' && typeof fieldValue === 'number') {
+      return `$${fieldValue.toLocaleString()}`;
+    }
+    
+    return fieldValue;
+  };
 
   const handleTabChange = (event, newValue) => {
     setCurrentTab(newValue);
@@ -324,35 +438,35 @@ const LoanDetails = () => {
                       <TableBody>
                         <TableRow>
                           <TableCell component="th" scope="row">Full Name</TableCell>
-                          <TableCell>{primaryBorrower.full_name}</TableCell>
+                          <TableCell>{renderFieldWithDiscrepancy(primaryBorrower.full_name, 'string', 'full_name', 'borrower')}</TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell component="th" scope="row">Phone</TableCell>
-                          <TableCell>{primaryBorrower.phone}</TableCell>
+                          <TableCell>{renderFieldWithDiscrepancy(primaryBorrower.phone, 'string', 'phone', 'borrower')}</TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell component="th" scope="row">Email</TableCell>
-                          <TableCell>{primaryBorrower.email}</TableCell>
+                          <TableCell>{renderFieldWithDiscrepancy(primaryBorrower.email, 'string', 'email', 'borrower')}</TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell component="th" scope="row">Credit Score</TableCell>
-                          <TableCell>{primaryBorrower.credit_score}</TableCell>
+                          <TableCell>{renderFieldWithDiscrepancy(primaryBorrower.credit_score, 'string', 'credit_score', 'borrower')}</TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell component="th" scope="row">Annual Income</TableCell>
-                          <TableCell>${primaryBorrower.annual_income?.toLocaleString()}</TableCell>
+                          <TableCell>{renderFieldWithDiscrepancy(primaryBorrower.annual_income, 'currency', 'annual_income', 'borrower')}</TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell component="th" scope="row">Employment Status</TableCell>
-                          <TableCell>{primaryBorrower.employment_status}</TableCell>
+                          <TableCell>{renderFieldWithDiscrepancy(primaryBorrower.employment_status, 'string', 'employment_status', 'borrower')}</TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell component="th" scope="row">Employer</TableCell>
-                          <TableCell>{primaryBorrower.employer}</TableCell>
+                          <TableCell>{renderFieldWithDiscrepancy(primaryBorrower.employer, 'string', 'employer', 'borrower')}</TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell component="th" scope="row">Years at Current Job</TableCell>
-                          <TableCell>{primaryBorrower.years_at_job}</TableCell>
+                          <TableCell>{renderFieldWithDiscrepancy(primaryBorrower.years_at_job, 'string', 'years_at_job', 'borrower')}</TableCell>
                         </TableRow>
                       </TableBody>
                     </Table>
@@ -373,35 +487,35 @@ const LoanDetails = () => {
                         <TableBody>
                           <TableRow>
                             <TableCell component="th" scope="row">Full Name</TableCell>
-                            <TableCell>{coBorrower.full_name}</TableCell>
+                            <TableCell>{renderFieldWithDiscrepancy(coBorrower.full_name, 'string', 'full_name', 'coBorrower')}</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell component="th" scope="row">Phone</TableCell>
-                            <TableCell>{coBorrower.phone}</TableCell>
+                            <TableCell>{renderFieldWithDiscrepancy(coBorrower.phone, 'string', 'phone', 'coBorrower')}</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell component="th" scope="row">Email</TableCell>
-                            <TableCell>{coBorrower.email}</TableCell>
+                            <TableCell>{renderFieldWithDiscrepancy(coBorrower.email, 'string', 'email', 'coBorrower')}</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell component="th" scope="row">Credit Score</TableCell>
-                            <TableCell>{coBorrower.credit_score}</TableCell>
+                            <TableCell>{renderFieldWithDiscrepancy(coBorrower.credit_score, 'string', 'credit_score', 'coBorrower')}</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell component="th" scope="row">Annual Income</TableCell>
-                            <TableCell>${coBorrower.annual_income?.toLocaleString()}</TableCell>
+                            <TableCell>{renderFieldWithDiscrepancy(coBorrower.annual_income, 'currency', 'annual_income', 'coBorrower')}</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell component="th" scope="row">Employment Status</TableCell>
-                            <TableCell>{coBorrower.employment_status}</TableCell>
+                            <TableCell>{renderFieldWithDiscrepancy(coBorrower.employment_status, 'string', 'employment_status', 'coBorrower')}</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell component="th" scope="row">Employer</TableCell>
-                            <TableCell>{coBorrower.employer}</TableCell>
+                            <TableCell>{renderFieldWithDiscrepancy(coBorrower.employer, 'string', 'employer', 'coBorrower')}</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell component="th" scope="row">Years at Current Job</TableCell>
-                            <TableCell>{coBorrower.years_at_job}</TableCell>
+                            <TableCell>{renderFieldWithDiscrepancy(coBorrower.years_at_job, 'string', 'years_at_job', 'coBorrower')}</TableCell>
                           </TableRow>
                         </TableBody>
                       </Table>
@@ -429,27 +543,27 @@ const LoanDetails = () => {
                       </TableRow>
                       <TableRow>
                         <TableCell component="th" scope="row">Loan Amount</TableCell>
-                        <TableCell>${loan.loan_amount?.toLocaleString()}</TableCell>
+                        <TableCell>{renderFieldWithDiscrepancy(loan.loan_amount, 'currency', 'loan_amount')}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell component="th" scope="row">Term</TableCell>
-                        <TableCell>{Math.floor(loan.loan_term_months / 12)} years</TableCell>
+                        <TableCell>{renderFieldWithDiscrepancy(Math.floor(loan.loan_term_months / 12), 'string', 'loan_term_months')}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell component="th" scope="row">Interest Rate</TableCell>
-                        <TableCell>{loan.interest_rate}%</TableCell>
+                        <TableCell>{renderFieldWithDiscrepancy(loan.interest_rate, 'percentage', 'interest_rate')}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell component="th" scope="row">Monthly Payment</TableCell>
-                        <TableCell>${loan.monthly_payment?.toLocaleString()}</TableCell>
+                        <TableCell>{renderFieldWithDiscrepancy(loan.monthly_payment, 'currency', 'monthly_payment')}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell component="th" scope="row">Down Payment</TableCell>
-                        <TableCell>${loan.down_payment?.toLocaleString() || 'N/A'}</TableCell>
+                        <TableCell>{renderFieldWithDiscrepancy(loan.down_payment, 'currency', 'down_payment') || 'N/A'}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell component="th" scope="row">Loan-to-Value Ratio</TableCell>
-                        <TableCell>{loan.loan_to_value?.toFixed(1) || 'N/A'}%</TableCell>
+                        <TableCell>{renderFieldWithDiscrepancy(loan.loan_to_value?.toFixed(1), 'percentage', 'loan_to_value') || 'N/A'}%</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell component="th" scope="row">Application Date</TableCell>
@@ -478,35 +592,35 @@ const LoanDetails = () => {
                       <TableBody>
                         <TableRow>
                           <TableCell component="th" scope="row">Make</TableCell>
-                          <TableCell>{loan.vehicle_make}</TableCell>
+                          <TableCell>{renderFieldWithDiscrepancy(loan.vehicle_make, 'string', 'vehicle_make', 'vehicle')}</TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell component="th" scope="row">Model</TableCell>
-                          <TableCell>{loan.vehicle_model}</TableCell>
+                          <TableCell>{renderFieldWithDiscrepancy(loan.vehicle_model, 'string', 'vehicle_model', 'vehicle')}</TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell component="th" scope="row">Year</TableCell>
-                          <TableCell>{loan.vehicle_year}</TableCell>
+                          <TableCell>{renderFieldWithDiscrepancy(loan.vehicle_year, 'string', 'vehicle_year', 'vehicle')}</TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell component="th" scope="row">VIN</TableCell>
-                          <TableCell>{loan.vehicle_details.vin}</TableCell>
+                          <TableCell>{renderFieldWithDiscrepancy(loan.vehicle_details.vin, 'string', 'vin', 'vehicle')}</TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell component="th" scope="row">Color</TableCell>
-                          <TableCell>{loan.vehicle_details.color}</TableCell>
+                          <TableCell>{renderFieldWithDiscrepancy(loan.vehicle_details.color, 'string', 'color', 'vehicle')}</TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell component="th" scope="row">Mileage</TableCell>
-                          <TableCell>{loan.vehicle_details.mileage?.toLocaleString()} miles</TableCell>
+                          <TableCell>{renderFieldWithDiscrepancy(loan.vehicle_details.mileage?.toLocaleString(), 'string', 'mileage', 'vehicle')} miles</TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell component="th" scope="row">Condition</TableCell>
-                          <TableCell>{loan.vehicle_details.condition}</TableCell>
+                          <TableCell>{renderFieldWithDiscrepancy(loan.vehicle_details.condition, 'string', 'condition', 'vehicle')}</TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell component="th" scope="row">Vehicle Value</TableCell>
-                          <TableCell>${loan.vehicle_price?.toLocaleString()}</TableCell>
+                          <TableCell>{renderFieldWithDiscrepancy(loan.vehicle_price, 'currency', 'vehicle_price', 'vehicle')}</TableCell>
                         </TableRow>
                       </TableBody>
                     </Table>
@@ -714,9 +828,6 @@ const LoanDetails = () => {
 
       {/* Action buttons */}
       <Box sx={{ mt: 4, display: 'flex', justifyContent: 'flex-end' }}>
-        <Button variant="outlined" sx={{ mr: 2 }}>
-          Download Application PDF
-        </Button>
         <Button variant="contained">
           {loan.status === 'pending' || loan.status === 'needs_documents' 
             ? 'Review Application' 

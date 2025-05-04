@@ -12,6 +12,7 @@ import DocumentViewer from './components/document/DocumentViewer';
 import DocumentUpload from './components/document/DocumentUpload';
 import LoanApplications from './components/applications/LoanApplications';
 import LoanDetails from './components/applications/LoanDetails';
+import Settings from './components/settings/Settings';
 
 // Create theme
 const theme = createTheme({
@@ -53,6 +54,7 @@ function App() {
                 <Route path="/document/:id" element={<DocumentViewer />} />
                 <Route path="/applications" element={<LoanApplications />} />
                 <Route path="/applications/:id" element={<LoanDetails />} />
+                <Route path="/settings" element={<Settings />} />
               </Routes>
             </main>
           </div>

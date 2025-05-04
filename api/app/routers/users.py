@@ -70,6 +70,28 @@ async def get_admin_user(current_user: models.User = Depends(get_current_user)):
         )
     return current_user
 
+# Add a helper function to get a default user for testing without authentication
+async def get_default_test_user(db: Session = Depends(get_db)):
+    """For testing only: returns a default user without requiring authentication"""
+    # Try to get the first user from the database
+    user = db.query(models.User).first()
+    
+    # If no user exists, create a default one
+    if not user:
+        hashed_password = get_password_hash("testpassword")
+        user = models.User(
+            email="test@example.com",
+            hashed_password=hashed_password,
+            full_name="Test User",
+            is_active=True,
+            lending_authority_level=3  # Set a default authority level
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    
+    return user
+
 # Routes
 @router.post("/token", response_model=dict)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -110,11 +132,13 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     return db_user
 
 @router.get("/me", response_model=schemas.UserResponse)
-async def read_users_me(current_user: models.User = Depends(get_current_user)):
+async def read_users_me(db: Session = Depends(get_db)):
     """
-    Get current user information
+    Get current user information - TESTING MODE: No authentication required
     """
-    return current_user
+    # For testing purposes, we're using a default user instead of requiring authentication
+    user = await get_default_test_user(db)
+    return user
 
 @router.get("/", response_model=List[schemas.UserResponse])
 async def read_users(
@@ -128,3 +152,30 @@ async def read_users(
     """
     users = db.query(models.User).offset(skip).limit(limit).all()
     return users
+
+@router.patch("/authority-level", response_model=schemas.UserResponse)
+async def update_lending_authority_level(
+    authority_data: schemas.AuthorityLevelUpdate,
+    db: Session = Depends(get_db)
+):
+    """
+    Update user's lending authority level (1-8) - TESTING MODE: No authentication required
+    """
+    # Validate the authority level is within acceptable range (1-8)
+    if authority_data.lending_authority_level < 1 or authority_data.lending_authority_level > 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Lending authority level must be between 1 and 8"
+        )
+    
+    # For testing purposes, we're using a default user instead of requiring authentication
+    user = await get_default_test_user(db)
+    
+    # Update the user's lending authority level
+    user.lending_authority_level = authority_data.lending_authority_level
+    user.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(user)
+    
+    return user

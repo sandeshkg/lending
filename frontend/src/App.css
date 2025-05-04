@@ -40,9 +40,10 @@
 
 /* Document viewer styles */
 .document-viewer {
-  display: flex;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
   gap: 20px;
-  height: calc(100vh - 104px);
+  height: calc(100vh - 180px);
 }
 
 .document-preview {
@@ -51,11 +52,15 @@
   border-radius: 4px;
   overflow: auto;
   background: white;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .document-info {
   width: 350px;
   overflow: auto;
+  height: 100%;
 }
 
 /* Document upload styles */

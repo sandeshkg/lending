@@ -1,4 +1,13 @@
 import api from './api';
+import axios from 'axios';
+
+// Create a separate API instance for LLM API calls
+const llmApi = axios.create({
+  baseURL: 'http://localhost:8001',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
 const documentService = {
   // Get all documents for a specific loan
@@ -57,6 +66,19 @@ const documentService = {
       const response = await api.delete(`/documents/${documentId}`);
       return response.data; // Backend already handles both DB record and file system deletion
     } catch (error) {
+      throw error;
+    }
+  },
+  
+  // Extract information from a document using the LLM API
+  extractDocumentInfo: async (documentId) => {
+    try {
+      // Use the LLM API with the correct endpoint including the /api prefix
+      const response = await llmApi.get(`/api/documents/analyze/${documentId}`);
+      console.log("LLM API Response:", response.data); // Debug logging
+      return response.data; // Returns analysis results from the LLM API
+    } catch (error) {
+      console.error("LLM API Error:", error);
       throw error;
     }
   }
