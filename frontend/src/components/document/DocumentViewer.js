@@ -330,7 +330,7 @@ const DocumentViewer = () => {
         
         {/* Document Info Panel */}
         <div className="document-info">
-          <Card sx={{ height: '100%' }}>
+          <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
               <Tabs 
                 value={currentTab} 
@@ -344,7 +344,7 @@ const DocumentViewer = () => {
             
             {/* Details Tab */}
             {currentTab === 0 && (
-              <CardContent>
+              <CardContent sx={{ flex: '1 1 auto', overflow: 'auto' }}>
                 <Typography variant="h6" gutterBottom>
                   Document Information
                 </Typography>
@@ -437,7 +437,7 @@ const DocumentViewer = () => {
             
             {/* History Tab */}
             {currentTab === 1 && (
-              <CardContent>
+              <CardContent sx={{ flex: '1 1 auto', overflow: 'auto' }}>
                 <Typography variant="h6" gutterBottom>
                   Processing History
                 </Typography>

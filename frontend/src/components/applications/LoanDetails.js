@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link, useLocation } from 'react-router-dom';
+import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Typography,
   Box,
@@ -28,7 +28,9 @@ import {
   Alert,
   CircularProgress,
   TextField,
-  Tooltip
+  Tooltip,
+  Dialog,
+  DialogContent
 } from '@mui/material';
 import {
   Timeline,
@@ -53,12 +55,15 @@ import EditIcon from '@mui/icons-material/Edit';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import DownloadIcon from '@mui/icons-material/Download';
 import InfoIcon from '@mui/icons-material/Info';
+import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
 import loanService from '../../services/loanService';
 import documentService from '../../services/documentService';
+import VarianceReview from './validation/VarianceReview';
 
 const LoanDetails = () => {
   const { id } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const [loan, setLoan] = useState(null);
   const [currentTab, setCurrentTab] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -67,18 +72,51 @@ const LoanDetails = () => {
   const [newNote, setNewNote] = useState({ author: '', content: '' });
   const [submittingNote, setSubmittingNote] = useState(false);
   const [extractedData, setExtractedData] = useState(null);
+  const [showVarianceReview, setShowVarianceReview] = useState(false);
+  const [validationRules, setValidationRules] = useState({});
+  const [validatingApplication, setValidatingApplication] = useState(false);
+  const [validationErrors, setValidationErrors] = useState([]);
 
   // Fetch loan details from API
   useEffect(() => {
     const fetchLoanDetails = async () => {
       try {
         setLoading(true);
+        console.log('Fetching loan with ID:', id);
         const loanData = await loanService.getLoan(id);
+        console.log('Loan data received:', loanData);
+        
+        // Ensure borrowers array exists
+        if (!loanData.borrowers) {
+          loanData.borrowers = [];
+        }
+        
+        // Ensure vehicle_details exists
+        if (!loanData.vehicle_details) {
+          loanData.vehicle_details = {};
+        }
+        
+        // Ensure notes array exists
+        if (!loanData.notes) {
+          loanData.notes = [];
+        }
+        
+        // Ensure timeline array exists
+        if (!loanData.timeline) {
+          loanData.timeline = [];
+        }
+        
         setLoan(loanData);
         
         // Fetch documents for this loan
-        const docsData = await documentService.getDocuments(loanData.id);
-        setDocuments(docsData);
+        try {
+          const docsData = await documentService.getDocuments(loanData.id);
+          setDocuments(docsData);
+        } catch (docError) {
+          console.error('Error fetching documents:', docError);
+          // Don't fail the entire load if documents can't be fetched
+          setDocuments([]);
+        }
         
         setError(null);
       } catch (err) {
@@ -101,6 +139,81 @@ const LoanDetails = () => {
       setCurrentTab(0);
     }
   }, [location.state]);
+
+  // Load validation rules from localStorage
+  useEffect(() => {
+    const savedRules = localStorage.getItem('validationRules');
+    if (savedRules) {
+      try {
+        const parsedRules = JSON.parse(savedRules);
+        setValidationRules(parsedRules);
+        console.log('Loaded validation rules:', parsedRules);
+      } catch (error) {
+        console.error('Error parsing validation rules:', error);
+        // Set default rules
+        setDefaultValidationRules();
+      }
+    } else {
+      // Set default rules if none found in localStorage
+      setDefaultValidationRules();
+    }
+  }, []);
+  
+  // Set default validation rules
+  const setDefaultValidationRules = () => {
+    const defaultRules = {
+      default_currency: {
+        warning_percentage: 10,
+        critical_percentage: 20,
+        warning_absolute: 1000,
+        critical_absolute: 5000,
+        mismatch_severity: 'warning'
+      },
+      default_percentage: {
+        warning_percentage: 5,
+        critical_percentage: 15,
+        warning_absolute: 1,
+        critical_absolute: 3,
+        mismatch_severity: 'warning'
+      },
+      default_number: {
+        warning_percentage: 10,
+        critical_percentage: 25,
+        warning_absolute: 10,
+        critical_absolute: 50,
+        mismatch_severity: 'warning'
+      },
+      default_text: {
+        mismatch_severity: 'info'
+      },
+      // Critical fields
+      full_name: {
+        mismatch_severity: 'critical',
+        block_progress: true
+      },
+      borrower_full_name: {
+        mismatch_severity: 'critical',
+        block_progress: true
+      },
+      loan_amount: {
+        warning_percentage: 5,
+        critical_percentage: 10,
+        warning_absolute: 500,
+        critical_absolute: 2000,
+        mismatch_severity: 'critical'
+      },
+      interest_rate: {
+        warning_percentage: 5,
+        critical_percentage: 10,
+        warning_absolute: 0.5,
+        critical_absolute: 1,
+        mismatch_severity: 'critical'
+      }
+    };
+    
+    setValidationRules(defaultRules);
+    console.log('Set default validation rules:', defaultRules);
+  };
 
   // Reusable function to determine if a field has a discrepancy with extracted data
   const getDiscrepancyInfo = (fieldType, fieldName, originalValue, parentField = null) => {
@@ -254,6 +367,180 @@ const LoanDetails = () => {
         icon={config.icon}
       />
     );
+  };
+
+  // Handle reviewing the application
+  const handleReviewApplication = async () => {
+    // Check if we have extracted data
+    if (!extractedData) {
+      // Need to process documents first
+      if (documents.length === 0) {
+        alert('No documents found for this application. Please upload documents first.');
+        return;
+      }
+      
+      setValidatingApplication(true);
+      
+      try {
+        // Get the document ID for the first document (typically the sales contract)
+        const docId = documents[0].id;
+        
+        // Process the document and extract data
+        const result = await documentService.analyzeDocument(docId);
+        
+        if (result && result.loan_application) {
+          setExtractedData(result.loan_application);
+          
+          // Show the variance review screen
+          setShowVarianceReview(true);
+        } else {
+          alert('Failed to extract data from documents. Please try again.');
+        }
+      } catch (error) {
+        console.error('Error processing documents:', error);
+        alert('Error processing documents. Please try again.');
+      } finally {
+        setValidatingApplication(false);
+      }
+    } else {
+      // We already have extracted data, go straight to variance review
+      setShowVarianceReview(true);
+    }
+  };
+
+  // Handle closing the variance review
+  const handleCloseVarianceReview = () => {
+    setShowVarianceReview(false);
+  };
+
+  // Handle continuing with review after variance check
+  const handleContinueWithReview = async (updatedValues) => {
+    setShowVarianceReview(false);
+    setValidatingApplication(true);
+    
+    try {
+      // Update loan with values from variance review
+      if (Object.keys(updatedValues).length > 0) {
+        const updateData = { ...updatedValues };
+        
+        // Update the loan in the state to reflect changes
+        setLoan(prev => ({
+          ...prev,
+          ...updateData
+        }));
+        
+        // Save the changes to the server
+        await loanService.updateLoan(loan.id, updateData);
+        
+        // Add a note about the update
+        await loanService.addNote(loan.id, {
+          author: 'System',
+          content: 'Application values updated after document validation'
+        });
+      }
+      
+      // Get the updated loan data after changes
+      const updatedLoanData = await loanService.getLoan(id);
+      setLoan(updatedLoanData);
+      
+      // Perform validation checks
+      // For demonstration, we'll simulate a validation against lending criteria
+      try {
+        const validationResult = await validateApplicationAgainstCriteria(updatedLoanData || loan);
+        
+        if (validationResult.success) {
+          // Update loan status to validated
+          await loanService.updateLoanStatus(loan.id, 'validated');
+          
+          // Update local state
+          setLoan(prev => ({
+            ...prev,
+            status: 'validated'
+          }));
+          
+          // Add validation success note
+          await loanService.addNote(loan.id, {
+            author: 'System',
+            content: 'Application passed all validation checks'
+          });
+          
+          // Show success message
+          alert('Application has been validated successfully!');
+        } else {
+          // Update loan status to issues found
+          await loanService.updateLoanStatus(loan.id, 'issues');
+          
+          // Update local state
+          setLoan(prev => ({
+            ...prev,
+            status: 'issues'
+          }));
+          
+          // Save validation errors
+          setValidationErrors(validationResult.errors);
+          
+          // Add validation failure note
+          await loanService.addNote(loan.id, {
+            author: 'System',
+            content: `Application validation found issues: ${validationResult.errors.join(', ')}`
+          });
+          
+          // Show error message
+          alert('Validation found issues with the application. See validation results for details.');
+        }
+      } catch (validationError) {
+        console.error('Error validating application:', validationError);
+        alert('Error during application validation. Please check the data and try again.');
+      }
+      
+      // Refresh the loan data
+      const finalLoanData = await loanService.getLoan(id);
+      setLoan(finalLoanData);
+      
+    } catch (error) {
+      console.error('Error during validation process:', error);
+      alert('Error during validation process. Please try again.');
+    } finally {
+      setValidatingApplication(false);
+    }
+  };
+
+  // Simulate validation against lending criteria
+  const validateApplicationAgainstCriteria = async (loanData) => {
+    // This is a simplified validation that would be more complex in a real application
+    const errors = [];
+    
+    // Check loan amount against vehicle value
+    if (loanData.loan_amount > loanData.vehicle_price * 1.1) {
+      errors.push('Loan amount exceeds 110% of vehicle value');
+    }
+    
+    // Check loan-to-value ratio
+    if (loanData.loan_to_value > 100) {
+      errors.push('Loan-to-value ratio exceeds 100%');
+    }
+    
+    // Check credit score of primary borrower
+    const primaryBorrower = loanData.borrowers?.find(b => !b.is_co_borrower);
+    if (primaryBorrower && primaryBorrower.credit_score < 650) {
+      errors.push('Primary borrower credit score below minimum requirement');
+    }
+    
+    // Check debt-to-income ratio (simplified)
+    if (primaryBorrower && primaryBorrower.annual_income) {
+      const monthlyIncome = primaryBorrower.annual_income / 12;
+      if (loanData.monthly_payment > monthlyIncome * 0.4) {
+        errors.push('Monthly payment exceeds 40% of monthly income');
+      }
+    }
+    
+    // Simulate API call delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    return {
+      success: errors.length === 0,
+      errors
+    };
   };
 
   if (loading) {
@@ -423,215 +710,230 @@ const LoanDetails = () => {
 
       {/* Application Details Tab */}
       {currentTab === 0 && (
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <Card sx={{ height: '100%' }}>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Borrower Information
-                </Typography>
-                <Divider sx={{ mb: 2 }} />
-                
-                {primaryBorrower ? (
-                  <TableContainer component={Paper} elevation={0}>
-                    <Table size="small">
-                      <TableBody>
-                        <TableRow>
-                          <TableCell component="th" scope="row">Full Name</TableCell>
-                          <TableCell>{renderFieldWithDiscrepancy(primaryBorrower.full_name, 'string', 'full_name', 'borrower')}</TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell component="th" scope="row">Phone</TableCell>
-                          <TableCell>{renderFieldWithDiscrepancy(primaryBorrower.phone, 'string', 'phone', 'borrower')}</TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell component="th" scope="row">Email</TableCell>
-                          <TableCell>{renderFieldWithDiscrepancy(primaryBorrower.email, 'string', 'email', 'borrower')}</TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell component="th" scope="row">Credit Score</TableCell>
-                          <TableCell>{renderFieldWithDiscrepancy(primaryBorrower.credit_score, 'string', 'credit_score', 'borrower')}</TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell component="th" scope="row">Annual Income</TableCell>
-                          <TableCell>{renderFieldWithDiscrepancy(primaryBorrower.annual_income, 'currency', 'annual_income', 'borrower')}</TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell component="th" scope="row">Employment Status</TableCell>
-                          <TableCell>{renderFieldWithDiscrepancy(primaryBorrower.employment_status, 'string', 'employment_status', 'borrower')}</TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell component="th" scope="row">Employer</TableCell>
-                          <TableCell>{renderFieldWithDiscrepancy(primaryBorrower.employer, 'string', 'employer', 'borrower')}</TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell component="th" scope="row">Years at Current Job</TableCell>
-                          <TableCell>{renderFieldWithDiscrepancy(primaryBorrower.years_at_job, 'string', 'years_at_job', 'borrower')}</TableCell>
-                        </TableRow>
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                ) : (
-                  <Alert severity="info">No primary borrower information available</Alert>
-                )}
-
-                {coBorrower && (
-                  <>
-                    <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
-                      Co-Borrower Information
-                    </Typography>
-                    <Divider sx={{ mb: 2 }} />
-                    
+        <>
+          {validationErrors.length > 0 && (
+            <Alert severity="error" sx={{ mb: 3 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                Validation Issues Found:
+              </Typography>
+              <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                {validationErrors.map((error, index) => (
+                  <li key={index}>{error}</li>
+                ))}
+              </ul>
+            </Alert>
+          )}
+        
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Borrower Information
+                  </Typography>
+                  <Divider sx={{ mb: 2 }} />
+                  
+                  {primaryBorrower ? (
                     <TableContainer component={Paper} elevation={0}>
                       <Table size="small">
                         <TableBody>
                           <TableRow>
                             <TableCell component="th" scope="row">Full Name</TableCell>
-                            <TableCell>{renderFieldWithDiscrepancy(coBorrower.full_name, 'string', 'full_name', 'coBorrower')}</TableCell>
+                            <TableCell>{renderFieldWithDiscrepancy(primaryBorrower.full_name, 'string', 'full_name', 'borrower')}</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell component="th" scope="row">Phone</TableCell>
-                            <TableCell>{renderFieldWithDiscrepancy(coBorrower.phone, 'string', 'phone', 'coBorrower')}</TableCell>
+                            <TableCell>{renderFieldWithDiscrepancy(primaryBorrower.phone, 'string', 'phone', 'borrower')}</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell component="th" scope="row">Email</TableCell>
-                            <TableCell>{renderFieldWithDiscrepancy(coBorrower.email, 'string', 'email', 'coBorrower')}</TableCell>
+                            <TableCell>{renderFieldWithDiscrepancy(primaryBorrower.email, 'string', 'email', 'borrower')}</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell component="th" scope="row">Credit Score</TableCell>
-                            <TableCell>{renderFieldWithDiscrepancy(coBorrower.credit_score, 'string', 'credit_score', 'coBorrower')}</TableCell>
+                            <TableCell>{renderFieldWithDiscrepancy(primaryBorrower.credit_score, 'string', 'credit_score', 'borrower')}</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell component="th" scope="row">Annual Income</TableCell>
-                            <TableCell>{renderFieldWithDiscrepancy(coBorrower.annual_income, 'currency', 'annual_income', 'coBorrower')}</TableCell>
+                            <TableCell>{renderFieldWithDiscrepancy(primaryBorrower.annual_income, 'currency', 'annual_income', 'borrower')}</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell component="th" scope="row">Employment Status</TableCell>
-                            <TableCell>{renderFieldWithDiscrepancy(coBorrower.employment_status, 'string', 'employment_status', 'coBorrower')}</TableCell>
+                            <TableCell>{renderFieldWithDiscrepancy(primaryBorrower.employment_status, 'string', 'employment_status', 'borrower')}</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell component="th" scope="row">Employer</TableCell>
-                            <TableCell>{renderFieldWithDiscrepancy(coBorrower.employer, 'string', 'employer', 'coBorrower')}</TableCell>
+                            <TableCell>{renderFieldWithDiscrepancy(primaryBorrower.employer, 'string', 'employer', 'borrower')}</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell component="th" scope="row">Years at Current Job</TableCell>
-                            <TableCell>{renderFieldWithDiscrepancy(coBorrower.years_at_job, 'string', 'years_at_job', 'coBorrower')}</TableCell>
+                            <TableCell>{renderFieldWithDiscrepancy(primaryBorrower.years_at_job, 'string', 'years_at_job', 'borrower')}</TableCell>
                           </TableRow>
                         </TableBody>
                       </Table>
                     </TableContainer>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          </Grid>
+                  ) : (
+                    <Alert severity="info">No primary borrower information available</Alert>
+                  )}
 
-          <Grid item xs={12} md={6}>
-            <Card sx={{ mb: 3 }}>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Loan Information
-                </Typography>
-                <Divider sx={{ mb: 2 }} />
-                
-                <TableContainer component={Paper} elevation={0}>
-                  <Table size="small">
-                    <TableBody>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Loan Type</TableCell>
-                        <TableCell>Vehicle Loan</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Loan Amount</TableCell>
-                        <TableCell>{renderFieldWithDiscrepancy(loan.loan_amount, 'currency', 'loan_amount')}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Term</TableCell>
-                        <TableCell>{renderFieldWithDiscrepancy(Math.floor(loan.loan_term_months / 12), 'string', 'loan_term_months')}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Interest Rate</TableCell>
-                        <TableCell>{renderFieldWithDiscrepancy(loan.interest_rate, 'percentage', 'interest_rate')}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Monthly Payment</TableCell>
-                        <TableCell>{renderFieldWithDiscrepancy(loan.monthly_payment, 'currency', 'monthly_payment')}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Down Payment</TableCell>
-                        <TableCell>{renderFieldWithDiscrepancy(loan.down_payment, 'currency', 'down_payment') || 'N/A'}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Loan-to-Value Ratio</TableCell>
-                        <TableCell>{renderFieldWithDiscrepancy(loan.loan_to_value?.toFixed(1), 'percentage', 'loan_to_value') || 'N/A'}%</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Application Date</TableCell>
-                        <TableCell>{new Date(loan.created_at).toLocaleDateString()}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Status</TableCell>
-                        <TableCell>{getStatusChip(loan.status)}</TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </CardContent>
-            </Card>
+                  {coBorrower && (
+                    <>
+                      <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
+                        Co-Borrower Information
+                      </Typography>
+                      <Divider sx={{ mb: 2 }} />
+                      
+                      <TableContainer component={Paper} elevation={0}>
+                        <Table size="small">
+                          <TableBody>
+                            <TableRow>
+                              <TableCell component="th" scope="row">Full Name</TableCell>
+                              <TableCell>{renderFieldWithDiscrepancy(coBorrower.full_name, 'string', 'full_name', 'coBorrower')}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell component="th" scope="row">Phone</TableCell>
+                              <TableCell>{renderFieldWithDiscrepancy(coBorrower.phone, 'string', 'phone', 'coBorrower')}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell component="th" scope="row">Email</TableCell>
+                              <TableCell>{renderFieldWithDiscrepancy(coBorrower.email, 'string', 'email', 'coBorrower')}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell component="th" scope="row">Credit Score</TableCell>
+                              <TableCell>{renderFieldWithDiscrepancy(coBorrower.credit_score, 'string', 'credit_score', 'coBorrower')}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell component="th" scope="row">Annual Income</TableCell>
+                              <TableCell>{renderFieldWithDiscrepancy(coBorrower.annual_income, 'currency', 'annual_income', 'coBorrower')}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell component="th" scope="row">Employment Status</TableCell>
+                              <TableCell>{renderFieldWithDiscrepancy(coBorrower.employment_status, 'string', 'employment_status', 'coBorrower')}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell component="th" scope="row">Employer</TableCell>
+                              <TableCell>{renderFieldWithDiscrepancy(coBorrower.employer, 'string', 'employer', 'coBorrower')}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell component="th" scope="row">Years at Current Job</TableCell>
+                              <TableCell>{renderFieldWithDiscrepancy(coBorrower.years_at_job, 'string', 'years_at_job', 'coBorrower')}</TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
 
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Vehicle Information
-                </Typography>
-                <Divider sx={{ mb: 2 }} />
-                
-                {loan.vehicle_details ? (
+            <Grid item xs={12} md={6}>
+              <Card sx={{ mb: 3 }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Loan Information
+                  </Typography>
+                  <Divider sx={{ mb: 2 }} />
+                  
                   <TableContainer component={Paper} elevation={0}>
                     <Table size="small">
                       <TableBody>
                         <TableRow>
-                          <TableCell component="th" scope="row">Make</TableCell>
-                          <TableCell>{renderFieldWithDiscrepancy(loan.vehicle_make, 'string', 'vehicle_make', 'vehicle')}</TableCell>
+                          <TableCell component="th" scope="row">Loan Type</TableCell>
+                          <TableCell>Vehicle Loan</TableCell>
                         </TableRow>
                         <TableRow>
-                          <TableCell component="th" scope="row">Model</TableCell>
-                          <TableCell>{renderFieldWithDiscrepancy(loan.vehicle_model, 'string', 'vehicle_model', 'vehicle')}</TableCell>
+                          <TableCell component="th" scope="row">Loan Amount</TableCell>
+                          <TableCell>{renderFieldWithDiscrepancy(loan.loan_amount, 'currency', 'loan_amount')}</TableCell>
                         </TableRow>
                         <TableRow>
-                          <TableCell component="th" scope="row">Year</TableCell>
-                          <TableCell>{renderFieldWithDiscrepancy(loan.vehicle_year, 'string', 'vehicle_year', 'vehicle')}</TableCell>
+                          <TableCell component="th" scope="row">Term</TableCell>
+                          <TableCell>{renderFieldWithDiscrepancy(Math.floor(loan.loan_term_months / 12), 'string', 'loan_term_months')}</TableCell>
                         </TableRow>
                         <TableRow>
-                          <TableCell component="th" scope="row">VIN</TableCell>
-                          <TableCell>{renderFieldWithDiscrepancy(loan.vehicle_details.vin, 'string', 'vin', 'vehicle')}</TableCell>
+                          <TableCell component="th" scope="row">Interest Rate</TableCell>
+                          <TableCell>{renderFieldWithDiscrepancy(loan.interest_rate, 'percentage', 'interest_rate')}</TableCell>
                         </TableRow>
                         <TableRow>
-                          <TableCell component="th" scope="row">Color</TableCell>
-                          <TableCell>{renderFieldWithDiscrepancy(loan.vehicle_details.color, 'string', 'color', 'vehicle')}</TableCell>
+                          <TableCell component="th" scope="row">Monthly Payment</TableCell>
+                          <TableCell>{renderFieldWithDiscrepancy(loan.monthly_payment, 'currency', 'monthly_payment')}</TableCell>
                         </TableRow>
                         <TableRow>
-                          <TableCell component="th" scope="row">Mileage</TableCell>
-                          <TableCell>{renderFieldWithDiscrepancy(loan.vehicle_details.mileage?.toLocaleString(), 'string', 'mileage', 'vehicle')} miles</TableCell>
+                          <TableCell component="th" scope="row">Down Payment</TableCell>
+                          <TableCell>{renderFieldWithDiscrepancy(loan.down_payment, 'currency', 'down_payment') || 'N/A'}</TableCell>
                         </TableRow>
                         <TableRow>
-                          <TableCell component="th" scope="row">Condition</TableCell>
-                          <TableCell>{renderFieldWithDiscrepancy(loan.vehicle_details.condition, 'string', 'condition', 'vehicle')}</TableCell>
+                          <TableCell component="th" scope="row">Loan-to-Value Ratio</TableCell>
+                          <TableCell>{renderFieldWithDiscrepancy(loan.loan_to_value?.toFixed(1), 'percentage', 'loan_to_value') || 'N/A'}%</TableCell>
                         </TableRow>
                         <TableRow>
-                          <TableCell component="th" scope="row">Vehicle Value</TableCell>
-                          <TableCell>{renderFieldWithDiscrepancy(loan.vehicle_price, 'currency', 'vehicle_price', 'vehicle')}</TableCell>
+                          <TableCell component="th" scope="row">Application Date</TableCell>
+                          <TableCell>{new Date(loan.created_at).toLocaleDateString()}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell component="th" scope="row">Status</TableCell>
+                          <TableCell>{getStatusChip(loan.status)}</TableCell>
                         </TableRow>
                       </TableBody>
                     </Table>
                   </TableContainer>
-                ) : (
-                  <Alert severity="info">Detailed vehicle information not available</Alert>
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Vehicle Information
+                  </Typography>
+                  <Divider sx={{ mb: 2 }} />
+                  
+                  {loan.vehicle_details ? (
+                    <TableContainer component={Paper} elevation={0}>
+                      <Table size="small">
+                        <TableBody>
+                          <TableRow>
+                            <TableCell component="th" scope="row">Make</TableCell>
+                            <TableCell>{renderFieldWithDiscrepancy(loan.vehicle_make, 'string', 'vehicle_make', 'vehicle')}</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell component="th" scope="row">Model</TableCell>
+                            <TableCell>{renderFieldWithDiscrepancy(loan.vehicle_model, 'string', 'vehicle_model', 'vehicle')}</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell component="th" scope="row">Year</TableCell>
+                            <TableCell>{renderFieldWithDiscrepancy(loan.vehicle_year, 'string', 'vehicle_year', 'vehicle')}</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell component="th" scope="row">VIN</TableCell>
+                            <TableCell>{renderFieldWithDiscrepancy(loan.vehicle_details.vin, 'string', 'vin', 'vehicle')}</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell component="th" scope="row">Color</TableCell>
+                            <TableCell>{renderFieldWithDiscrepancy(loan.vehicle_details.color, 'string', 'color', 'vehicle')}</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell component="th" scope="row">Mileage</TableCell>
+                            <TableCell>{renderFieldWithDiscrepancy(loan.vehicle_details.mileage?.toLocaleString(), 'string', 'mileage', 'vehicle')} miles</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell component="th" scope="row">Condition</TableCell>
+                            <TableCell>{renderFieldWithDiscrepancy(loan.vehicle_details.condition, 'string', 'condition', 'vehicle')}</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell component="th" scope="row">Vehicle Value</TableCell>
+                            <TableCell>{renderFieldWithDiscrepancy(loan.vehicle_price, 'currency', 'vehicle_price', 'vehicle')}</TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  ) : (
+                    <Alert severity="info">Detailed vehicle information not available</Alert>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
           </Grid>
-        </Grid>
+        </>
       )}
 
       {/* Documents Tab */}
@@ -828,14 +1130,42 @@ const LoanDetails = () => {
 
       {/* Action buttons */}
       <Box sx={{ mt: 4, display: 'flex', justifyContent: 'flex-end' }}>
-        <Button variant="contained">
-          {loan.status === 'pending' || loan.status === 'needs_documents' 
+        <Button 
+          variant="contained"
+          onClick={handleReviewApplication}
+          startIcon={validatingApplication ? <CircularProgress size={20} color="inherit" /> : <CompareArrowsIcon />}
+          disabled={validatingApplication}
+        >
+          {validatingApplication ? 'Processing...' : 
+           loan.status === 'pending' || loan.status === 'needs_documents' 
             ? 'Review Application' 
             : loan.status === 'in_review' 
             ? 'Continue Processing' 
+            : loan.status === 'issues'
+            ? 'Revalidate Application'
             : 'Update Status'}
         </Button>
       </Box>
+
+      {/* Variance Review Dialog */}
+      <Dialog 
+        open={showVarianceReview} 
+        onClose={handleCloseVarianceReview}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogContent sx={{ p: 0 }}>
+          {extractedData && (
+            <VarianceReview
+              loan={loan}
+              extractedData={extractedData}
+              onClose={handleCloseVarianceReview}
+              onContinueWithReview={handleContinueWithReview}
+              validationRules={validationRules}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

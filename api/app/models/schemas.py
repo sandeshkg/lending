@@ -180,8 +180,9 @@ class LoanApplicationBase(BaseModel):
     @field_validator('loan_amount')
     @classmethod
     def validate_loan_amount(cls, v, info):
-        if 'vehicle_price' in info.data and v > info.data['vehicle_price']:
-            raise ValueError('Loan amount cannot be greater than vehicle price')
+        # Allow loan amount to exceed vehicle price by up to 20% to account for taxes, fees, and add-ons
+        if 'vehicle_price' in info.data and v > info.data['vehicle_price'] * 1.2:
+            raise ValueError('Loan amount cannot exceed 120% of vehicle price')
         return v
 
 class LoanApplicationCreate(LoanApplicationBase):
@@ -249,6 +250,12 @@ class LoanApplicationDetail(LoanApplication):
     vehicle_details: Optional[VehicleDetailsResponse] = None
     notes: List[NoteResponse] = []
 
+    model_config = {"from_attributes": True}
+
+# Status-only update schema
+class LoanStatusUpdate(BaseModel):
+    status: LoanStatus
+    
     model_config = {"from_attributes": True}
 
 # Authority level schema

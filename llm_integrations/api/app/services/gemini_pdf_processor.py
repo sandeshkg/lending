@@ -325,22 +325,8 @@ Important: Your response must be a valid JSON object."""
                         )
                     )
                 except (ValueError, TypeError):
-                    # Fallback to no system instruction
-                    # Add instruction to content instead
-                    contents = [
-                        types.Content(
-                            parts=[
-                                types.Part(text = instructions + "\n\nPlease analyze this PDF document:"),
-                                types.Part(data=pdf_bytes, mime_type="application/pdf")
-                            ]
-                        )
-                    ]
-                    
-                    response = self.client.models.generate_content(
-                        model=model_name,
-                        contents=contents,
-                        config=config
-                    )
+                    logger.error("Error generating content : {str(e)}")
+                    return state
                 
             except (AttributeError, TypeError, ValueError) as e:
                 # Handle older API versions or errors

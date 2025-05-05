@@ -102,21 +102,45 @@ def get_loan_application(
     """
     Get a specific loan application by ID or application number
     """
-    # Try to get by ID first (if numeric)
-    if application_id.isdigit():
-        db_loan = db.query(models.LoanApplication).filter(
-            models.LoanApplication.id == int(application_id)
-        ).first()
-    else:
-        # Try to get by application number
-        db_loan = db.query(models.LoanApplication).filter(
-            models.LoanApplication.application_number == application_id
-        ).first()
-    
-    if db_loan is None:
-        raise HTTPException(status_code=404, detail="Loan application not found")
-    
-    return db_loan
+    try:
+        # Try to get by ID first (if numeric)
+        if application_id.isdigit():
+            db_loan = db.query(models.LoanApplication).filter(
+                models.LoanApplication.id == int(application_id)
+            ).first()
+        else:
+            # Try to get by application number
+            db_loan = db.query(models.LoanApplication).filter(
+                models.LoanApplication.application_number == application_id
+            ).first()
+        
+        if db_loan is None:
+            raise HTTPException(status_code=404, detail="Loan application not found")
+        
+        # Ensure related data is loaded
+        if not hasattr(db_loan, 'borrowers') or db_loan.borrowers is None:
+            db_loan.borrowers = []
+            
+        if not hasattr(db_loan, 'notes') or db_loan.notes is None:
+            db_loan.notes = []
+            
+        if not hasattr(db_loan, 'timeline') or db_loan.timeline is None:
+            db_loan.timeline = []
+            
+        # Ensure vehicle_details exists to avoid null reference issues
+        if not hasattr(db_loan, 'vehicle_details') or db_loan.vehicle_details is None:
+            # Create empty vehicle details to avoid null reference
+            db_loan.vehicle_details = None
+        
+        return db_loan
+    except Exception as e:
+        # Log the error
+        print(f"Error retrieving loan application {application_id}: {str(e)}")
+        # Return a more specific error
+        raise HTTPException(
+            status_code=500, 
+            detail=f"An error occurred when retrieving loan application: {str(e)}"
+        )
 
 @router.put("/{application_id}", response_model=schemas.LoanApplicationResponse)
 def update_loan_application(
@@ -278,3 +302,41 @@ def get_loan_vehicle_details(
         raise HTTPException(status_code=404, detail="Vehicle details not found")
     
     return db_loan.vehicle_details
+
+@router.patch("/{application_id}/status", response_model=schemas.LoanApplicationResponse)
+def update_loan_status(
+    application_id: str,
+    status_update: schemas.LoanStatusUpdate,
+    db: Session = Depends(get_db)
+):
+    """
+    Update only the status of a loan application
+    """
+    # Find loan by ID or application number
+    if application_id.isdigit():
+        db_loan = db.query(models.LoanApplication).filter(
+            models.LoanApplication.id == int(application_id)
+        ).first()
+    else:
+        db_loan = db.query(models.LoanApplication).filter(
+            models.LoanApplication.application_number == application_id
+        ).first()
+    
+    if db_loan is None:
+        raise HTTPException(status_code=404, detail="Loan application not found")
+    
+    # Update loan status
+    db_loan.status = status_update.status
+    
+    # Add timeline event for status change
+    timeline_event = models.TimelineEvent(
+        loan_id=db_loan.id,
+        event=f"Loan status changed to {status_update.status.value}",
+        user="System",  # Would use authenticated user in production
+        type=models.TimelineEventType.INFO
+    )
+    db.add(timeline_event)
+    
+    db.commit()
+    db.refresh(db_loan)
+    return db_loan

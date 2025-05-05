@@ -13,6 +13,9 @@ class LoanStatus(str, enum.Enum):
     REJECTED = "rejected"
     FUNDED = "funded"
     CLOSED = "closed"
+    VALIDATED = "validated"
+    ISSUES = "issues"
+    NEEDS_DOCUMENTS = "needs_documents"
 
 class DocumentStatus(str, enum.Enum):
     PENDING = "pending"

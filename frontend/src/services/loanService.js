@@ -45,6 +45,16 @@ const loanService = {
     }
   },
   
+  // Update just the status of a loan application
+  updateLoanStatus: async (applicationId, status) => {
+    try {
+      const response = await api.patch(`/loans/${applicationId}/status`, { status });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+  
   // Add a note to a loan application
   addNote: async (applicationId, noteData) => {
     try {

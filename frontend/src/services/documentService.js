@@ -81,6 +81,17 @@ const documentService = {
       console.error("LLM API Error:", error);
       throw error;
     }
+  },
+
+  // Analyze document and extract data for validation
+  analyzeDocument: async (documentId) => {
+    try {
+      // This is an alias for extractDocumentInfo to maintain consistency with LoanDetails.js
+      return await documentService.extractDocumentInfo(documentId);
+    } catch (error) {
+      console.error("Document Analysis Error:", error);
+      throw error;
+    }
   }
 };
 
